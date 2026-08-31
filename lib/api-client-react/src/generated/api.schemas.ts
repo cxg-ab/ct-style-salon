@@ -69,6 +69,14 @@ export interface Stylist {
   schedule: StylistScheduleEntry[];
 }
 
+export interface StylistUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+}
+
 export interface StylistScheduleUpdate {
   /** @maxItems 21 */
   schedule: StylistScheduleEntry[];

@@ -20,3 +20,4 @@ export * from './serviceUpdate';
 export * from './stylist';
 export * from './stylistScheduleEntry';
 export * from './stylistScheduleUpdate';
+export * from './stylistUpdate';

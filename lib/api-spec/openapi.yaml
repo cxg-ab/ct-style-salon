@@ -173,6 +173,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /stylists/{stylistId}:
+    patch:
+      operationId: updateStylist
+      tags: [salon]
+      summary: Update an employee's name
+      security:
+        - SalonManager: []
+      parameters:
+        - name: stylistId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StylistUpdate"
+      responses:
+        "200":
+          description: Updated employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stylist"
+        "400":
+          description: Invalid employee name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Manager access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Employee not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /availability:
     get:
       operationId: getAvailability
@@ -381,6 +425,15 @@ components:
         - initials
         - accent
         - schedule
+    StylistUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+      required:
+        - name
     StylistScheduleEntry:
       type: object
       properties:

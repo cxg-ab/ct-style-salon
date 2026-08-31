@@ -111,6 +111,16 @@ export function setStylistSchedule(
   return savedSchedule.map((entry) => ({ ...entry }));
 }
 
+export function renameStylistSchedule(
+  previousName: string,
+  nextName: string,
+): StylistScheduleEntry[] {
+  const schedule = stylistSchedules.get(previousName) ?? [];
+  stylistSchedules.delete(previousName);
+  stylistSchedules.set(nextName, schedule);
+  return schedule.map((entry) => ({ ...entry }));
+}
+
 export async function ensureSalonSeeded(): Promise<void> {
   const [service] = await db
     .select({ id: servicesTable.id })

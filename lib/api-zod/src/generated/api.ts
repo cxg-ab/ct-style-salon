@@ -171,6 +171,43 @@ export const UpdateStylistScheduleResponse = zod.object({
 
 
 /**
+ * @summary Update an employee's name
+ */
+export const UpdateStylistParams = zod.object({
+  "stylistId": zod.coerce.number().int()
+})
+
+export const updateStylistBodyNameMax = 80;
+
+
+
+export const UpdateStylistBody = zod.object({
+  "name": zod.string().min(1).max(updateStylistBodyNameMax)
+})
+
+export const updateStylistResponseScheduleItemDayOfWeekMin = 0;
+export const updateStylistResponseScheduleItemDayOfWeekMax = 6;
+
+export const updateStylistResponseScheduleItemOpenTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const updateStylistResponseScheduleItemCloseTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+
+
+export const UpdateStylistResponse = zod.object({
+  "id": zod.int(),
+  "name": zod.string(),
+  "role": zod.string(),
+  "bio": zod.string(),
+  "initials": zod.string(),
+  "accent": zod.string(),
+  "schedule": zod.array(zod.object({
+  "dayOfWeek": zod.int().min(updateStylistResponseScheduleItemDayOfWeekMin).max(updateStylistResponseScheduleItemDayOfWeekMax),
+  "openTime": zod.string().regex(updateStylistResponseScheduleItemOpenTimeRegExp),
+  "closeTime": zod.string().regex(updateStylistResponseScheduleItemCloseTimeRegExp)
+}))
+})
+
+
+/**
  * @summary Get appointment time slots for an employee, service, and date
  */
 export const GetAvailabilityQueryParams = zod.object({
