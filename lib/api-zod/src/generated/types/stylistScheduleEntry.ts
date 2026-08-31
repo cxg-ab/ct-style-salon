@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { StylistBreak } from './stylistBreak';
 
 export interface StylistScheduleEntry {
   /**
@@ -16,4 +17,6 @@ export interface StylistScheduleEntry {
   openTime: string;
   /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
   closeTime: string;
+  /** @maxItems 3 */
+  breaks?: StylistBreak[];
 }

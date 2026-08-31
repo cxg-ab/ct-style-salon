@@ -47,6 +47,13 @@ export interface ServiceUpdate {
   featured: boolean;
 }
 
+export interface StylistBreak {
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  startTime: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  endTime: string;
+}
+
 export interface StylistScheduleEntry {
   /**
      * @minimum 0
@@ -57,6 +64,8 @@ export interface StylistScheduleEntry {
   openTime: string;
   /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
   closeTime: string;
+  /** @maxItems 3 */
+  breaks?: StylistBreak[];
 }
 
 export interface Stylist {

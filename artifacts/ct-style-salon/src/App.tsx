@@ -16,11 +16,13 @@ import {
   Mail,
   MapPin,
   Menu,
+  Plus,
   Phone,
   Scissors,
   Search,
   ShieldCheck,
   Star,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-react';
@@ -32,6 +34,7 @@ import {
   getListStylistsQueryKey,
   useCreateService,
   useCreateAppointment,
+  useDeleteService,
   useGetAvailability,
   useGetSalonSummary,
   useHealthCheck,
@@ -322,12 +325,27 @@ const weekDays = [
   { value: 0, short: 'sun' },
 ];
 
-function scheduleErrorMessage(error: unknown, fallback: string, translations: { openingBeforeClosing: string; scheduleOverlap: string }) {
+function scheduleErrorMessage(
+  error: unknown,
+  fallback: string,
+  translations: {
+    openingBeforeClosing?: string;
+    scheduleOverlap?: string;
+    breakBeforeEnd?: string;
+    breakOutsideHours?: string;
+    breakOverlap?: string;
+    serviceDeleteConflict?: string;
+  },
+) {
   if (error && typeof error === 'object' && 'data' in error) {
     const data = (error as { data?: unknown }).data;
     if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') {
-      if (data.error === 'Each opening time must be earlier than its closing time.') return translations.openingBeforeClosing;
-      if (data.error === 'Working hours cannot overlap on the same day.') return translations.scheduleOverlap;
+      if (data.error === 'Each opening time must be earlier than its closing time.') return translations.openingBeforeClosing ?? data.error;
+      if (data.error === 'Working hours cannot overlap on the same day.') return translations.scheduleOverlap ?? data.error;
+      if (data.error === 'Each break must start before it ends.') return translations.breakBeforeEnd ?? data.error;
+      if (data.error === 'Breaks must fall within working hours.') return translations.breakOutsideHours ?? data.error;
+      if (data.error === 'Breaks cannot overlap on the same day.') return translations.breakOverlap ?? data.error;
+      if (data.error === 'This service cannot be deleted because it has existing appointments.') return translations.serviceDeleteConflict ?? data.error;
       return data.error;
     }
   }
@@ -338,6 +356,24 @@ function validateScheduleInForm(schedule: StylistScheduleEntry[]) {
   for (const entry of schedule) {
     if (entry.openTime >= entry.closeTime) {
       return 'Each opening time must be earlier than its closing time.';
+    }
+    const breaks = entry.breaks ?? [];
+    for (const breakTime of breaks) {
+      if (breakTime.startTime >= breakTime.endTime) {
+        return 'Each break must start before it ends.';
+      }
+      if (breakTime.startTime < entry.openTime || breakTime.endTime > entry.closeTime) {
+        return 'Breaks must fall within working hours.';
+      }
+    }
+    for (let breakIndex = 0; breakIndex < breaks.length; breakIndex += 1) {
+      for (let otherBreakIndex = breakIndex + 1; otherBreakIndex < breaks.length; otherBreakIndex += 1) {
+        const breakTime = breaks[breakIndex];
+        const otherBreak = breaks[otherBreakIndex];
+        if (breakTime.startTime < otherBreak.endTime && otherBreak.startTime < breakTime.endTime) {
+          return 'Breaks cannot overlap on the same day.';
+        }
+      }
     }
   }
   for (let index = 0; index < schedule.length; index += 1) {
@@ -375,17 +411,44 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
     setFeedback(undefined);
     setSchedule((current) => current.map((entry) => entry.dayOfWeek === dayOfWeek ? { ...entry, [field]: value } : entry));
   };
+  const updateBreak = (dayOfWeek: number, breakIndex: number, field: 'startTime' | 'endTime', value: string) => {
+    setFeedback(undefined);
+    setSchedule((current) => current.map((entry) => entry.dayOfWeek === dayOfWeek
+      ? { ...entry, breaks: (entry.breaks ?? []).map((breakTime, index) => index === breakIndex ? { ...breakTime, [field]: value } : breakTime) }
+      : entry));
+  };
+  const addBreak = (dayOfWeek: number) => {
+    setFeedback(undefined);
+    setSchedule((current) => current.map((entry) => entry.dayOfWeek === dayOfWeek
+      ? { ...entry, breaks: [...(entry.breaks ?? []), { startTime: '13:00', endTime: '14:00' }] }
+      : entry));
+  };
+  const removeBreak = (dayOfWeek: number, breakIndex: number) => {
+    setFeedback(undefined);
+    setSchedule((current) => current.map((entry) => entry.dayOfWeek === dayOfWeek
+      ? { ...entry, breaks: (entry.breaks ?? []).filter((_, index) => index !== breakIndex) }
+      : entry));
+  };
   const toggleDay = (dayOfWeek: number, enabled: boolean) => {
     setFeedback(undefined);
     setSchedule((current) => {
       if (!enabled) return current.filter((entry) => entry.dayOfWeek !== dayOfWeek);
-      return [...current, { dayOfWeek, openTime: '10:00', closeTime: '18:00' }].sort((left, right) => left.dayOfWeek - right.dayOfWeek);
+      return [...current, { dayOfWeek, openTime: '10:00', closeTime: '18:00', breaks: [] }].sort((left, right) => left.dayOfWeek - right.dayOfWeek);
     });
   };
   const save = () => {
     const validationError = validateScheduleInForm(schedule);
     if (validationError) {
-       setFeedback({ tone: 'error', message: validationError === 'Each opening time must be earlier than its closing time.' ? t('openingBeforeClosing') : t('scheduleOverlap') });
+       const message = validationError === 'Each opening time must be earlier than its closing time.'
+         ? t('openingBeforeClosing')
+         : validationError === 'Working hours cannot overlap on the same day.'
+           ? t('scheduleOverlap')
+           : validationError === 'Each break must start before it ends.'
+             ? t('breakBeforeEnd')
+             : validationError === 'Breaks must fall within working hours.'
+               ? t('breakOutsideHours')
+               : t('breakOverlap');
+       setFeedback({ tone: 'error', message });
       return;
     }
     updateSchedule.mutate(
@@ -398,7 +461,13 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
           queryClient.invalidateQueries({ queryKey: getGetAvailabilityQueryKey() });
         },
         onError: (error) => {
-           setFeedback({ tone: 'error', message: scheduleErrorMessage(error, t('scheduleError'), { openingBeforeClosing: t('openingBeforeClosing'), scheduleOverlap: t('scheduleOverlap') }) });
+           setFeedback({ tone: 'error', message: scheduleErrorMessage(error, t('scheduleError'), {
+             openingBeforeClosing: t('openingBeforeClosing'),
+             scheduleOverlap: t('scheduleOverlap'),
+             breakBeforeEnd: t('breakBeforeEnd'),
+             breakOutsideHours: t('breakOutsideHours'),
+             breakOverlap: t('breakOverlap'),
+           }) });
         },
       },
     );
@@ -434,18 +503,18 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
   };
 
   return (
-    <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7" data-testid={`schedule-editor-${stylist.id}`}>
-      <div className="flex flex-col justify-between gap-4 border-b border-[hsl(var(--border))] pb-5 sm:flex-row sm:items-start">
+    <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:p-5" data-testid={`schedule-editor-${stylist.id}`}>
+      <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-4 sm:flex-row sm:items-start">
          <div className="flex min-w-0 items-center gap-4">
            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-bold" style={{ backgroundColor: `${stylist.accent}25`, color: stylist.accent }}>{stylist.initials}</span>
             <button type="button" onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} aria-controls={`schedule-details-${stylist.id}`} className="min-w-0 text-left">
-             <span className="flex items-center gap-2"><h2 className="font-display text-3xl">{displayedStylist.name}</h2><ChevronDown size={18} className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} /></span>
+              <span className="flex items-center gap-2"><h2 className="font-display text-2xl">{displayedStylist.name}</h2><ChevronDown size={18} className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} /></span>
              <p className="mt-1 font-mono-ui text-[9px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">{displayedStylist.role}</p>
            </button>
         </div>
          <div className="flex flex-wrap items-center justify-end gap-2">
-           <button type="button" onClick={() => { setEditingName(true); setFeedback(undefined); }} className="inline-flex items-center justify-center rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.08em] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-edit-stylist-name-${stylist.id}`}>{t('editName')}</button>
-           <button type="button" onClick={save} disabled={updateSchedule.isPending} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid={`button-save-schedule-${stylist.id}`}>
+            <button type="button" onClick={() => { setEditingName(true); setFeedback(undefined); }} className="inline-flex items-center justify-center rounded-full border border-[hsl(var(--border))] px-3 py-2.5 text-[11px] font-bold tracking-[.08em] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-edit-stylist-name-${stylist.id}`}>{t('editName')}</button>
+            <button type="button" onClick={save} disabled={updateSchedule.isPending} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-4 py-2.5 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid={`button-save-schedule-${stylist.id}`}>
             {updateSchedule.isPending ? t('saving') : t('saveSchedule')} <Check size={14} />
            </button>
          </div>
@@ -459,11 +528,11 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
           <button type="submit" disabled={updateStylist.isPending} className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-4 py-3 text-[11px] font-bold tracking-[.08em] text-[hsl(var(--card))] disabled:opacity-60" data-testid={`button-save-stylist-name-${stylist.id}`}>{updateStylist.isPending ? t('saving') : t('saveName')} <Check size={14} /></button>
         </div>
       </form>}
-       <div id={`schedule-details-${stylist.id}`} hidden={!expanded} className="mt-5 space-y-2">
+        <div id={`schedule-details-${stylist.id}`} hidden={!expanded} className="mt-4 space-y-2">
         {weekDays.map((day) => {
           const entry = entryForDay(day.value);
           return (
-            <div key={day.value} className={`grid items-center gap-3 rounded-xl border p-3 sm:grid-cols-[minmax(140px,1fr)_1fr_1fr] ${entry ? 'border-[hsl(var(--border))] bg-[hsl(var(--background)/.45)]' : 'border-transparent bg-[hsl(var(--muted)/.45)]'}`}>
+             <div key={day.value} className={`grid items-center gap-2 rounded-xl border p-2.5 sm:grid-cols-[minmax(140px,1fr)_1fr_1fr] ${entry ? 'border-[hsl(var(--border))] bg-[hsl(var(--background)/.45)]' : 'border-transparent bg-[hsl(var(--muted)/.45)]'}`}>
               <label className="flex items-center gap-3 text-sm font-semibold">
                 <input type="checkbox" checked={Boolean(entry)} onChange={(event) => toggleDay(day.value, event.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" data-testid={`checkbox-schedule-${stylist.id}-${day.short.toLowerCase()}`} />
                  <span>{weekday(new Date(Date.UTC(2023, 0, 1 + day.value)), false)}</span>
@@ -471,11 +540,28 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
               {entry ? (
                 <>
                    <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">{t('open')}
-                    <input type="time" value={entry.openTime} onChange={(event) => updateEntry(day.value, 'openTime', event.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-open-${stylist.id}-${day.short.toLowerCase()}`} />
+                     <input type="time" value={entry.openTime} onChange={(event) => updateEntry(day.value, 'openTime', event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-2 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-open-${stylist.id}-${day.short.toLowerCase()}`} />
                   </label>
                    <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">{t('close')}
-                    <input type="time" value={entry.closeTime} onChange={(event) => updateEntry(day.value, 'closeTime', event.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-close-${stylist.id}-${day.short.toLowerCase()}`} />
+                     <input type="time" value={entry.closeTime} onChange={(event) => updateEntry(day.value, 'closeTime', event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-2 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-close-${stylist.id}-${day.short.toLowerCase()}`} />
                   </label>
+                   <div className="sm:col-span-3 rounded-lg border border-[hsl(var(--border)/.75)] bg-[hsl(var(--card)/.55)] p-2.5" data-testid={`breaks-${stylist.id}-${day.short.toLowerCase()}`}>
+                     <div className="flex flex-wrap items-center justify-between gap-2">
+                       <span className="font-mono-ui text-[9px] font-semibold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{t('breaks')}</span>
+                       {(entry.breaks ?? []).length < 3 && <button type="button" onClick={() => addBreak(day.value)} className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--border))] px-2.5 py-1.5 text-[10px] font-bold hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-add-break-${stylist.id}-${day.short.toLowerCase()}`}><Plus size={12} /> {t('addBreak')}</button>}
+                     </div>
+                     {(entry.breaks ?? []).length === 0 ? <p className="mt-2 text-[11px] text-[hsl(var(--muted-foreground))]">{t('noBreaks')}</p> : (
+                       <div className="mt-2 space-y-2">
+                         {(entry.breaks ?? []).map((breakTime, breakIndex) => (
+                           <div key={`${day.value}-${breakIndex}`} className="flex flex-wrap items-center gap-2" data-testid={`break-row-${stylist.id}-${day.short.toLowerCase()}-${breakIndex}`}>
+                             <label className="flex min-w-[130px] flex-1 items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">{t('breakStart')}<input type="time" value={breakTime.startTime} onChange={(event) => updateBreak(day.value, breakIndex, 'startTime', event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-2 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-break-start-${stylist.id}-${day.short.toLowerCase()}-${breakIndex}`} /></label>
+                             <label className="flex min-w-[130px] flex-1 items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">{t('breakEnd')}<input type="time" value={breakTime.endTime} onChange={(event) => updateBreak(day.value, breakIndex, 'endTime', event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-2 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-break-end-${stylist.id}-${day.short.toLowerCase()}-${breakIndex}`} /></label>
+                             <button type="button" onClick={() => removeBreak(day.value, breakIndex)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--destructive))] hover:text-[hsl(var(--destructive))]" aria-label={t('removeBreak')} data-testid={`button-remove-break-${stylist.id}-${day.short.toLowerCase()}-${breakIndex}`}><Trash2 size={14} /></button>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                   </div>
                 </>
                ) : <span className="font-mono-ui text-[10px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))] sm:col-span-2">{t('dayOff')}</span>}
             </div>
@@ -483,7 +569,7 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
         })}
       </div>
       {feedback && <p className={`mt-4 text-sm ${feedback.tone === 'error' ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--secondary))]'}`} role={feedback.tone === 'error' ? 'alert' : 'status'} data-testid={`status-schedule-${stylist.id}`}>{feedback.message}</p>}
-       <p className="mt-4 text-[11px] leading-5 text-[hsl(var(--muted-foreground))]">{t('scheduleIntro')}</p>
+       <p className="mt-3 text-[11px] leading-5 text-[hsl(var(--muted-foreground))]">{t('scheduleIntro')}</p>
     </section>
   );
 }
@@ -597,36 +683,36 @@ function ServiceEditor({
   };
 
   return (
-    <form onSubmit={save} className="mt-6 rounded-2xl border border-[hsl(var(--primary)/.35)] bg-[hsl(var(--card))] p-5 shadow-[0_14px_34px_hsl(var(--secondary)/.06)] sm:p-7" data-testid={service ? `service-editor-${service.id}` : 'service-editor-new'}>
-      <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-5 sm:flex-row sm:items-start">
+    <form onSubmit={save} className="mt-4 rounded-xl border border-[hsl(var(--primary)/.35)] bg-[hsl(var(--card))] p-4 shadow-[0_10px_24px_hsl(var(--secondary)/.05)] sm:p-5" data-testid={service ? `service-editor-${service.id}` : 'service-editor-new'}>
+      <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-4 sm:flex-row sm:items-start">
         <div>
            <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{service ? t('editService') : t('newService')}</p>
-           <h2 className="mt-2 font-display text-3xl">{service ? service.name : t('addToMenu')}</h2>
+           <h2 className="mt-1 font-display text-2xl">{service ? service.name : t('addToMenu')}</h2>
         </div>
          <button type="button" onClick={onCancel} className="self-start text-xs font-bold tracking-[.08em] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]" data-testid="button-cancel-service">{t('cancel')}</button>
       </div>
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
          <label className="text-xs font-semibold">{t('name')}
-          <input required value={form.name} onChange={(event) => updateField('name', event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-4 text-sm font-normal" data-testid="input-service-name" />
+           <input required value={form.name} onChange={(event) => updateField('name', event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-service-name" />
         </label>
          <label className="text-xs font-semibold">{t('category')}
-           <input required value={form.category} onChange={(event) => updateField('category', event.target.value)} placeholder={t('hairBeardSignature')} className="mt-2 h-12 w-full rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-4 text-sm font-normal" data-testid="input-service-category" />
+            <input required value={form.category} onChange={(event) => updateField('category', event.target.value)} placeholder={t('hairBeardSignature')} className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-service-category" />
         </label>
          <label className="text-xs font-semibold sm:col-span-2">{t('description')}
-          <textarea required value={form.description} onChange={(event) => updateField('description', event.target.value)} className="mt-2 min-h-[96px] w-full resize-y rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] p-4 text-sm font-normal" data-testid="input-service-description" />
+           <textarea required value={form.description} onChange={(event) => updateField('description', event.target.value)} className="mt-1.5 min-h-[76px] w-full resize-y rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] p-3 text-sm font-normal" data-testid="input-service-description" />
         </label>
          <label className="text-xs font-semibold">{t('price')}
-           <div className="relative mt-2"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[hsl(var(--primary))]">AED</span><input required type="text" inputMode="decimal" value={form.price} onChange={(event) => updateField('price', event.target.value)} placeholder="120.00" className="h-12 w-full rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] pl-14 pr-4 text-sm font-normal" data-testid="input-service-price" /></div>
+            <div className="relative mt-1.5"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--primary))]">AED</span><input required type="text" inputMode="decimal" value={form.price} onChange={(event) => updateField('price', event.target.value)} placeholder="120.00" className="h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] pl-12 pr-3 text-sm font-normal" data-testid="input-service-price" /></div>
         </label>
          <label className="text-xs font-semibold">{t('duration')}
-           <div className="relative mt-2"><input required type="number" min="1" step="1" value={form.durationMinutes} onChange={(event) => updateField('durationMinutes', event.target.value)} placeholder="45" className="mt-2 h-12 w-full rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-4 pr-16 text-sm font-normal" data-testid="input-service-duration" /><span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">{t('minutes')}</span></div>
+            <div className="relative mt-1.5"><input required type="number" min="1" step="1" value={form.durationMinutes} onChange={(event) => updateField('durationMinutes', event.target.value)} placeholder="45" className="h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 pr-16 text-sm font-normal" data-testid="input-service-duration" /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">{t('minutes')}</span></div>
         </label>
       </div>
       <label className="mt-5 flex items-center gap-3 text-sm font-semibold">
         <input type="checkbox" checked={form.featured} onChange={(event) => updateField('featured', event.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" data-testid="checkbox-service-featured" />
          {t('showFeatured')}
       </label>
-      <div className="mt-6 flex flex-col-reverse items-stretch justify-between gap-4 border-t border-[hsl(var(--border))] pt-5 sm:flex-row sm:items-center">
+      <div className="mt-4 flex flex-col-reverse items-stretch justify-between gap-3 border-t border-[hsl(var(--border))] pt-4 sm:flex-row sm:items-center">
          {feedback ? <p className="text-sm text-[hsl(var(--destructive))]" role="alert" data-testid="status-service-error">{feedback}</p> : <span className="text-[11px] text-[hsl(var(--muted-foreground))]">{t('durationControls')}</span>}
         <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid="button-save-service">
            {isPending ? t('saving') : service ? t('saveChanges') : t('addService')} <Check size={14} />
@@ -641,31 +727,54 @@ function ServiceManagement() {
   const servicesQuery = useListServices({ query: { queryKey: getListServicesQueryKey() } });
   const services = servicesQuery.data ?? [];
   const [editing, setEditing] = useState<number | 'new' | null>(null);
-  const [feedback, setFeedback] = useState<string>();
+  const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string }>();
+  const [confirmingDelete, setConfirmingDelete] = useState<number | null>(null);
+  const deleteService = useDeleteService({});
 
   const finishSave = (message: string) => {
     setEditing(null);
-    setFeedback(message);
+    setFeedback({ tone: 'success', message });
     queryClient.invalidateQueries({ queryKey: getListServicesQueryKey() });
   };
 
   return (
-    <section className="mt-12 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-5 sm:p-7" data-testid="service-management">
-      <div className="flex flex-col justify-between gap-4 border-b border-[hsl(var(--border))] pb-5 sm:flex-row sm:items-end">
-         <div><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('serviceMenu')}</p><h2 className="mt-2 font-display text-4xl">{t('rituals')}</h2><p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')}</p></div>
-         <button type="button" onClick={() => { setEditing('new'); setFeedback(undefined); }} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--card))] hover:bg-[hsl(var(--secondary)/.88)]" data-testid="button-add-service"><span className="text-lg leading-none">+</span> {t('addService')}</button>
+    <section className="mt-8 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-4 sm:p-5" data-testid="service-management">
+      <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-4 sm:flex-row sm:items-end">
+         <div><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('serviceMenu')}</p><h2 className="mt-1 font-display text-3xl">{t('rituals')}</h2><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')}</p></div>
+         <button type="button" onClick={() => { setEditing('new'); setFeedback(undefined); setConfirmingDelete(null); }} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-4 py-2.5 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--card))] hover:bg-[hsl(var(--secondary)/.88)]" data-testid="button-add-service"><Plus size={15} /> {t('addService')}</button>
       </div>
-      {feedback && <p className="mt-5 text-sm text-[hsl(var(--secondary))]" role="status" data-testid="status-service-success">{feedback}</p>}
+       {feedback && <p className={`mt-4 text-sm ${feedback.tone === 'error' ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--secondary))]'}`} role={feedback.tone === 'error' ? 'alert' : 'status'} data-testid={feedback.tone === 'error' ? 'status-service-delete-error' : 'status-service-success'}>{feedback.message}</p>}
       {editing === 'new' && <ServiceEditor onCancel={() => setEditing(null)} onSaved={finishSave} />}
-      <div className="mt-6 space-y-3">
+       <div className="mt-4 space-y-2">
          {servicesQuery.isLoading ? <LoadingCards count={2} /> : servicesQuery.isError ? <ErrorMessage retry={() => servicesQuery.refetch()} /> : services.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-10 text-center text-sm text-[hsl(var(--muted-foreground))]" data-testid="empty-managed-services">{t('noManagedServices')}</div> : services.map((service) => (
-          <div key={service.id} className="flex flex-col gap-5 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:flex-row sm:items-center sm:justify-between" data-testid={`service-manager-card-${service.id}`}>
+          <div key={service.id} className="flex flex-col gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:flex-row sm:items-center sm:justify-between" data-testid={`service-manager-card-${service.id}`}>
             <div className="min-w-0">
-               <div className="flex flex-wrap items-center gap-3"><h3 className="font-display text-2xl">{service.name}</h3>{service.featured && <span className="rounded-full bg-[hsl(var(--accent)/.45)] px-2 py-1 font-mono-ui text-[9px] uppercase tracking-[.08em]">{t('featured')}</span>}</div>
-              <p className="mt-2 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{service.description}</p>
-               <div className="mt-3 flex flex-wrap gap-4 font-mono-ui text-[10px] uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]"><span>{service.category}</span><span>{service.durationMinutes} {t('minutes')}</span><span>{formatPrice(service.price)}</span></div>
+                <div className="flex flex-wrap items-center gap-2"><h3 className="font-display text-xl">{service.name}</h3>{service.featured && <span className="rounded-full bg-[hsl(var(--accent)/.45)] px-2 py-1 font-mono-ui text-[9px] uppercase tracking-[.08em]">{t('featured')}</span>}</div>
+               <p className="mt-1 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{service.description}</p>
+                <div className="mt-2 flex flex-wrap gap-3 font-mono-ui text-[10px] uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]"><span>{service.category}</span><span>{service.durationMinutes} {t('minutes')}</span><span>{formatPrice(service.price)}</span></div>
             </div>
-             <button type="button" onClick={() => { setEditing(service.id); setFeedback(undefined); }} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.1em] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-edit-service-${service.id}`}>{t('editService')} <ArrowRight size={14} /></button>
+              {confirmingDelete === service.id ? (
+                <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-xl border border-[hsl(var(--destructive)/.28)] bg-[hsl(var(--destructive)/.05)] p-2" role="alert" data-testid={`confirm-delete-service-${service.id}`}>
+                  <span className="px-1 text-[11px] text-[hsl(var(--destructive))]">{t('confirmDeleteService')} <span className="opacity-70">{t('deleteServiceWarning')}</span></span>
+                  <button type="button" onClick={() => { setConfirmingDelete(null); }} className="rounded-full border border-[hsl(var(--border))] px-3 py-2 text-[10px] font-bold" data-testid={`button-cancel-delete-service-${service.id}`}>{t('cancel')}</button>
+                  <button type="button" disabled={deleteService.isPending} onClick={() => deleteService.mutate({ serviceId: service.id }, {
+                    onSuccess: () => {
+                      setConfirmingDelete(null);
+                      setFeedback({ tone: 'success', message: `${service.name} ${t('serviceDeleted')}` });
+                      queryClient.invalidateQueries({ queryKey: getListServicesQueryKey() });
+                    },
+                    onError: (error) => {
+                      setFeedback({ tone: 'error', message: scheduleErrorMessage(error, t('serviceDeleteError'), { serviceDeleteConflict: t('serviceDeleteConflict') }) });
+                      setConfirmingDelete(null);
+                    },
+                  })} className="rounded-full bg-[hsl(var(--destructive))] px-3 py-2 text-[10px] font-bold text-[hsl(var(--destructive-foreground))] disabled:opacity-60" data-testid={`button-confirm-delete-service-${service.id}`}>{deleteService.isPending ? t('saving') : t('confirmDelete')}</button>
+                </div>
+              ) : (
+                <div className="flex shrink-0 gap-2">
+                  <button type="button" onClick={() => { setEditing(service.id); setFeedback(undefined); setConfirmingDelete(null); }} className="inline-flex items-center justify-center gap-2 rounded-full border border-[hsl(var(--border))] px-3 py-2.5 text-[11px] font-bold tracking-[.1em] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-edit-service-${service.id}`}>{t('editService')} <ArrowRight size={14} /></button>
+                  <button type="button" onClick={() => { setConfirmingDelete(service.id); setEditing(null); setFeedback(undefined); }} className="inline-flex items-center justify-center rounded-full border border-[hsl(var(--destructive)/.35)] px-3 py-2.5 text-[11px] font-bold text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.06)]" aria-label={`${t('deleteService')} ${service.name}`} data-testid={`button-delete-service-${service.id}`}><Trash2 size={14} /></button>
+                </div>
+              )}
           </div>
         ))}
       </div>
@@ -680,19 +789,19 @@ function ManagerSchedule() {
   const stylists = stylistsQuery.data ?? [];
   const { signOut } = useClerk();
   return (
-    <main className="mx-auto max-w-[1000px] px-5 py-14 sm:px-8 md:py-24">
+    <main className="mx-auto max-w-[1080px] px-5 py-10 sm:px-8 md:py-16">
       <div className="flex flex-col justify-between gap-8 sm:flex-row sm:items-start">
         <div className="max-w-2xl reveal">
            <p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('managerWorkspace')}</p>
-           <h1 className="mt-4 font-display text-6xl leading-[.84] sm:text-8xl">{t('managerWorkspaceShort')}<br /><i>{t('goodHands')}</i></h1>
-           <p className="mt-7 max-w-xl text-base leading-7 text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')} {t('scheduleIntro')}</p>
+           <h1 className="mt-3 font-display text-5xl leading-[.86] sm:text-6xl">{t('managerWorkspaceShort')} <i>{t('goodHands')}</i></h1>
+           <p className="mt-4 max-w-xl text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')} {t('scheduleIntro')}</p>
         </div>
         <button type="button" onClick={() => signOut({ redirectUrl: basePath || '/' })} className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid="button-manager-sign-out">
            {t('signOut')}
         </button>
       </div>
       <ServiceManagement />
-      <div className="mt-12 space-y-5">
+       <div className="mt-8 space-y-3">
          {stylistsQuery.isLoading ? <LoadingCards count={3} /> : stylistsQuery.isError ? <ErrorMessage retry={() => stylistsQuery.refetch()} /> : stylists.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-12 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noEmployees')}</div> : stylists.map((stylist) => <ScheduleEditor key={stylist.id} stylist={stylist} />)}
       </div>
     </main>

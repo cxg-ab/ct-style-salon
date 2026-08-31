@@ -14,7 +14,9 @@ type MessageKey =
   | 'featured' | 'editService' | 'newService' | 'addToMenu' | 'cancel' | 'name'
   | 'category' | 'description' | 'price' | 'duration' | 'minutes' | 'hairBeardSignature'
   | 'showFeatured' | 'durationControls' | 'saving' | 'saveChanges' | 'saveSchedule'
-  | 'scheduleSaved' | 'scheduleError' | 'openingBeforeClosing' | 'scheduleOverlap'
+   | 'scheduleSaved' | 'scheduleError' | 'openingBeforeClosing' | 'scheduleOverlap'
+   | 'breaks' | 'addBreak' | 'removeBreak' | 'breakStart' | 'breakEnd' | 'noBreaks'
+   | 'breakBeforeEnd' | 'breakOutsideHours' | 'breakOverlap'
   | 'open' | 'close' | 'dayOff' | 'scheduleIntro' | 'noEmployees' | 'signOut'
   | 'reserveYourChair' | 'goodHourStarts' | 'bookingIntro' | 'employee' | 'service'
   | 'dateTime' | 'details' | 'choosePerson' | 'whoSee' | 'teamOnWay' | 'chooseService'
@@ -31,7 +33,9 @@ type MessageKey =
   | 'serviceAdded' | 'serviceUpdated' | 'serviceSaveError' | 'noManagedServices'
   | 'signInLoading' | 'confirmed' | 'pending' | 'cancelled' | 'collapseDetails' | 'expandDetails'
   | 'language' | 'heroTitle' | 'locationLine' | 'featuredEmpty'
-  | 'editName' | 'employeeName' | 'saveName' | 'nameSaved' | 'nameRequired' | 'nameError';
+   | 'editName' | 'employeeName' | 'saveName' | 'nameSaved' | 'nameRequired' | 'nameError'
+   | 'deleteService' | 'confirmDeleteService' | 'deleteServiceWarning' | 'confirmDelete'
+   | 'serviceDeleted' | 'serviceDeleteError' | 'serviceDeleteConflict';
 
 const messages: Record<Locale, Record<MessageKey, string>> = {
   en: {
@@ -60,8 +64,11 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     saveChanges: 'Save changes', saveSchedule: 'Save schedule', scheduleSaved: 'schedule is saved.',
     scheduleError: 'We could not save this schedule. Check the hours and try again.',
     openingBeforeClosing: 'Each opening time must be earlier than its closing time.',
-    scheduleOverlap: 'Working hours cannot overlap on the same day.', open: 'Open', close: 'Close',
-    dayOff: 'Day off', scheduleIntro: 'Booking times are offered every 90 minutes and stop when the selected service would run past closing.',
+     scheduleOverlap: 'Working hours cannot overlap on the same day.', open: 'Open', close: 'Close',
+     breaks: 'Breaks', addBreak: 'Add break', removeBreak: 'Remove break', breakStart: 'Start',
+     breakEnd: 'End', noBreaks: 'No recurring breaks', breakBeforeEnd: 'Each break must start before it ends.',
+     breakOutsideHours: 'Breaks must fall within working hours.', breakOverlap: 'Breaks cannot overlap on the same day.',
+     dayOff: 'Day off', scheduleIntro: 'Booking times are offered every 90 minutes. Services that overlap a recurring break or closing time are blocked.',
     noEmployees: 'No employees are available to schedule.', signOut: 'Sign out',
     reserveYourChair: 'Reserve your chair', goodHourStarts: 'A good hour starts here.',
     bookingIntro: 'Choose your person, then your ritual. We will show times that fit their schedule.',
@@ -103,7 +110,10 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     featuredEmpty: 'Our service menu is being refreshed. Please check back shortly.',
     editName: 'Edit name', employeeName: 'Employee name', saveName: 'Save name',
     nameSaved: 'name is saved.', nameRequired: 'Enter an employee name.',
-    nameError: 'We could not save that employee name.',
+     nameError: 'We could not save that employee name.',
+     deleteService: 'Delete', confirmDeleteService: 'Delete service?', deleteServiceWarning: 'This action cannot be undone.',
+     confirmDelete: 'Confirm delete', serviceDeleted: 'was removed from the menu.',
+     serviceDeleteError: 'We could not delete this service. Try again.', serviceDeleteConflict: 'This service cannot be deleted because it has existing appointments.',
   },
   ar: {
     theSalon: 'الصالون', bookVisit: 'احجز زيارة', yourAppointments: 'مواعيدك',
@@ -131,8 +141,11 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     saveChanges: 'حفظ التغييرات', saveSchedule: 'حفظ الجدول', scheduleSaved: 'تم حفظ الجدول.',
     scheduleError: 'تعذر حفظ هذا الجدول. تحقق من الساعات وحاول مرة أخرى.',
     openingBeforeClosing: 'يجب أن يسبق وقت الفتح وقت الإغلاق.',
-    scheduleOverlap: 'لا يمكن تداخل ساعات العمل في اليوم نفسه.', open: 'فتح', close: 'إغلاق',
-    dayOff: 'إجازة', scheduleIntro: 'تتوفر أوقات الحجز كل 90 دقيقة وتتوقف إذا تجاوزت الخدمة وقت الإغلاق.',
+     scheduleOverlap: 'لا يمكن تداخل ساعات العمل في اليوم نفسه.', open: 'فتح', close: 'إغلاق',
+     breaks: 'الاستراحات', addBreak: 'إضافة استراحة', removeBreak: 'إزالة الاستراحة', breakStart: 'البداية',
+     breakEnd: 'النهاية', noBreaks: 'لا توجد استراحات متكررة', breakBeforeEnd: 'يجب أن يسبق وقت بداية الاستراحة وقت نهايتها.',
+     breakOutsideHours: 'يجب أن تقع الاستراحات ضمن ساعات العمل.', breakOverlap: 'لا يمكن تداخل الاستراحات في اليوم نفسه.',
+     dayOff: 'إجازة', scheduleIntro: 'تتوفر أوقات الحجز كل 90 دقيقة. تُحجب الخدمات التي تتداخل مع استراحة متكررة أو وقت الإغلاق.',
     noEmployees: 'لا يوجد موظفون متاحون للجدولة.', signOut: 'تسجيل الخروج',
     reserveYourChair: 'احجز مقعدك', goodHourStarts: 'ساعة جميلة تبدأ من هنا.',
     bookingIntro: 'اختر الشخص ثم طقسك المفضل. سنعرض الأوقات التي تناسب جدوله.',
@@ -174,7 +187,10 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     featuredEmpty: 'نحدّث قائمة الخدمات حالياً. يرجى العودة قريباً.',
     editName: 'تعديل الاسم', employeeName: 'اسم الموظف', saveName: 'حفظ الاسم',
     nameSaved: 'تم حفظ الاسم.', nameRequired: 'أدخل اسم الموظف.',
-    nameError: 'تعذّر حفظ اسم الموظف.',
+     nameError: 'تعذّر حفظ اسم الموظف.',
+     deleteService: 'حذف', confirmDeleteService: 'حذف الخدمة؟', deleteServiceWarning: 'لا يمكن التراجع عن هذا الإجراء.',
+     confirmDelete: 'تأكيد الحذف', serviceDeleted: 'تمت إزالتها من القائمة.',
+     serviceDeleteError: 'تعذر حذف الخدمة. حاول مرة أخرى.', serviceDeleteConflict: 'لا يمكن حذف هذه الخدمة لوجود مواعيد مرتبطة بها.',
   },
 };
 

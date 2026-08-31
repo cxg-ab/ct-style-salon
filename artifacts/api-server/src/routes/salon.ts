@@ -1,4 +1,4 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
@@ -340,28 +340,31 @@ router.delete("/services/:serviceId", async (req, res): Promise<void> => {
     return;
   }
 
-  const [service] = await db
-    .select({ id: servicesTable.id })
-    .from(servicesTable)
-    .where(eq(servicesTable.id, params.data.serviceId))
-    .limit(1);
-  if (!service) {
-    res.status(404).json({ error: "Service not found." });
-    return;
-  }
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(${params.data.serviceId})`);
+    const [service] = await tx
+      .select({ id: servicesTable.id })
+      .from(servicesTable)
+      .where(eq(servicesTable.id, params.data.serviceId))
+      .limit(1);
+    if (!service) {
+      res.status(404).json({ error: "Service not found." });
+      return;
+    }
 
-  const [appointment] = await db
-    .select({ id: appointmentsTable.id })
-    .from(appointmentsTable)
-    .where(eq(appointmentsTable.serviceId, service.id))
-    .limit(1);
-  if (appointment) {
-    res.status(409).json({ error: "This service cannot be deleted because it has existing appointments." });
-    return;
-  }
+    const [appointment] = await tx
+      .select({ id: appointmentsTable.id })
+      .from(appointmentsTable)
+      .where(eq(appointmentsTable.serviceId, service.id))
+      .limit(1);
+    if (appointment) {
+      res.status(409).json({ error: "This service cannot be deleted because it has existing appointments." });
+      return;
+    }
 
-  await db.delete(servicesTable).where(eq(servicesTable.id, service.id));
-  res.status(204).send();
+    await tx.delete(servicesTable).where(eq(servicesTable.id, service.id));
+    res.status(204).send();
+  });
 });
 
 router.get("/stylists", async (_req, res): Promise<void> => {
@@ -580,75 +583,94 @@ router.post("/appointments", async (req, res): Promise<void> => {
     return;
   }
 
-  const service = await db
-    .select()
-    .from(servicesTable)
-    .where(eq(servicesTable.id, body.data.serviceId))
-    .limit(1);
-  const stylist = await db
-    .select()
-    .from(stylistsTable)
-    .where(eq(stylistsTable.id, body.data.stylistId))
-    .limit(1);
-  if (!service[0] || !stylist[0]) {
-    res.status(400).json({ error: "That service or stylist is no longer available." });
-    return;
-  }
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(${body.data.serviceId})`);
+    const service = await tx
+      .select()
+      .from(servicesTable)
+      .where(eq(servicesTable.id, body.data.serviceId))
+      .limit(1);
+    const stylist = await tx
+      .select()
+      .from(stylistsTable)
+      .where(eq(stylistsTable.id, body.data.stylistId))
+      .limit(1);
+    if (!service[0] || !stylist[0]) {
+      res.status(400).json({ error: "That service or stylist is no longer available." });
+      return;
+    }
 
-  const schedule = getStylistSchedule(stylist[0].name);
-  const weekday = body.data.date.getUTCDay();
-  if (!slotsForSchedule(schedule, weekday, service[0].durationMinutes).includes(body.data.time)) {
-    res.status(400).json({ error: "That employee is not scheduled for the selected time." });
-    return;
-  }
+    const schedule = getStylistSchedule(stylist[0].name);
+    const weekday = body.data.date.getUTCDay();
+    if (!slotsForSchedule(schedule, weekday, service[0].durationMinutes).includes(body.data.time)) {
+      const breakConflict = schedule
+        .filter((entry) => entry.dayOfWeek === weekday)
+        .some((entry) =>
+          (entry.breaks ?? []).some((breakTime) => {
+            const start = timeToMinutes(body.data.time);
+            const breakStart = scheduleTimeToMinutes(breakTime.startTime);
+            const breakEnd = scheduleTimeToMinutes(breakTime.endTime);
+            return start !== undefined &&
+              start < breakEnd &&
+              breakStart < start + service[0].durationMinutes;
+          }),
+        );
+      if (breakConflict) {
+        res.status(400).json({ error: "That employee is on a break at the selected time." });
+        return;
+      }
+      res.status(400).json({ error: "That employee is not scheduled for the selected time." });
+      return;
+    }
 
-  const date = body.data.date.toISOString().slice(0, 10);
-  const existingAppointments = await db
-    .select({
-      time: appointmentsTable.time,
-      durationMinutes: servicesTable.durationMinutes,
-    })
-    .from(appointmentsTable)
-    .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
-    .where(
-      and(
-        eq(appointmentsTable.stylistId, body.data.stylistId),
-        eq(appointmentsTable.date, date),
+    const date = body.data.date.toISOString().slice(0, 10);
+    const existingAppointments = await tx
+      .select({
+        time: appointmentsTable.time,
+        durationMinutes: servicesTable.durationMinutes,
+      })
+      .from(appointmentsTable)
+      .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
+      .where(
+        and(
+          eq(appointmentsTable.stylistId, body.data.stylistId),
+          eq(appointmentsTable.date, date),
+        ),
+      );
+    if (
+      existingAppointments.some((existingAppointment) =>
+        appointmentTimesOverlap(
+          body.data.time,
+          service[0].durationMinutes,
+          existingAppointment,
+        ),
+      )
+    ) {
+      res.status(400).json({ error: "That time was just booked. Please choose another slot." });
+      return;
+    }
+
+    const [created] = await tx
+      .insert(appointmentsTable)
+      .values({
+        serviceId: body.data.serviceId,
+        stylistId: body.data.stylistId,
+        customerName: body.data.customerName,
+        email: body.data.email.toLowerCase(),
+        phone: body.data.phone,
+        date,
+        time: body.data.time,
+        notes: body.data.notes ?? null,
+        status: "confirmed",
+      })
+      .returning();
+
+    res.status(201).json(
+      CreateAppointmentResponse.parse(
+        appointmentResponse(created, service[0].name, stylist[0].name),
       ),
     );
-  if (
-    existingAppointments.some((existingAppointment) =>
-      appointmentTimesOverlap(
-        body.data.time,
-        service[0].durationMinutes,
-        existingAppointment,
-      ),
-    )
-  ) {
-    res.status(400).json({ error: "That time was just booked. Please choose another slot." });
-    return;
-  }
-
-  const [created] = await db
-    .insert(appointmentsTable)
-    .values({
-      serviceId: body.data.serviceId,
-      stylistId: body.data.stylistId,
-      customerName: body.data.customerName,
-      email: body.data.email.toLowerCase(),
-      phone: body.data.phone,
-      date,
-      time: body.data.time,
-      notes: body.data.notes ?? null,
-      status: "confirmed",
-    })
-    .returning();
-
-  res.status(201).json(
-    CreateAppointmentResponse.parse(
-      appointmentResponse(created, service[0].name, stylist[0].name),
-    ),
-  );
+  });
 });
 
 router.get("/salon-summary", (_req, res): void => {

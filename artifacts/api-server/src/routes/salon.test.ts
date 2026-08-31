@@ -43,7 +43,7 @@ async function request<T>(
   });
   return {
     response,
-    body: (await response.json()) as T,
+    body: response.status === 204 ? undefined as T : (await response.json()) as T,
   };
 }
 
@@ -91,6 +91,16 @@ async function updateService(
   });
 }
 
+async function deleteService(
+  serviceId: number,
+  headers: Record<string, string> = managerHeaders,
+): Promise<ApiResult<{ error: string } | undefined>> {
+  return request(`/api/services/${serviceId}`, {
+    method: "DELETE",
+    headers,
+  });
+}
+
 function scheduleWithMonday(
   openTime: string,
   closeTime: string,
@@ -120,9 +130,10 @@ before(async () => {
     originalSchedules.set(stylist.id, stylist.schedule);
     originalStylistNames.set(stylist.id, stylist.name);
   }
-  marcoId = stylists.body.find((stylist) => stylist.name === "Marco")?.id ?? 0;
-  aishaId = stylists.body.find((stylist) => stylist.name === "Aisha")?.id ?? 0;
-  danielId = stylists.body.find((stylist) => stylist.name === "Daniel")?.id ?? 0;
+  const orderedStylists = [...stylists.body].sort((left, right) => left.id - right.id);
+  marcoId = orderedStylists[0]?.id ?? 0;
+  aishaId = orderedStylists[1]?.id ?? 0;
+  danielId = orderedStylists[2]?.id ?? 0;
 
   const services = await request<Array<{ id: number; name: string }>>("/api/services");
   assert.equal(services.response.status, 200);
@@ -244,6 +255,10 @@ test("service management rejects unauthenticated requests", async () => {
   const update = await updateService(createdServiceId ?? 999999, servicePayload, {});
   assert.equal(update.response.status, 401);
   assert.equal(update.body.error, "Sign in as a salon manager to make changes.");
+
+  const deletion = await deleteService(createdServiceId ?? 999999, {});
+  assert.equal(deletion.response.status, 401);
+  assert.equal(deletion.body?.error, "Sign in as a salon manager to make changes.");
 });
 
 test("service management rejects incomplete requests", async () => {
@@ -321,13 +336,27 @@ test("service management rejects malformed prices", async () => {
   );
 });
 
+test("manager can delete an unused service and it disappears from the listing", async () => {
+  assert.ok(createdServiceId);
+  const deletedId = createdServiceId;
+  const deleted = await deleteService(deletedId);
+  assert.equal(deleted.response.status, 204);
+  createdServiceId = undefined;
+
+  const listed = await request<Array<{ id: number }>>("/api/services");
+  assert.equal(listed.response.status, 200);
+  assert.ok(!listed.body.some((service) => service.id === deletedId));
+});
+
 test("manager can rename an employee without losing their schedule", async () => {
   const originalSchedule = originalSchedules.get(marcoId);
+  const originalName = originalStylistNames.get(marcoId);
   assert.ok(originalSchedule);
+  assert.ok(originalName);
 
-  const updated = await updateStylistName(marcoId, "Marco Updated");
+  const updated = await updateStylistName(marcoId, `${originalName} Updated`);
   assert.equal(updated.response.status, 200);
-  assert.equal(updated.body.name, "Marco Updated");
+  assert.equal(updated.body.name, `${originalName} Updated`);
   assert.deepEqual(updated.body.schedule, originalSchedule);
 
   const listed = await request<Array<{ id: number; name: string; schedule: StylistScheduleEntry[] }>>(
@@ -335,7 +364,7 @@ test("manager can rename an employee without losing their schedule", async () =>
   );
   assert.equal(listed.response.status, 200);
   const listedStylist = listed.body.find((stylist) => stylist.id === marcoId);
-  assert.equal(listedStylist?.name, "Marco Updated");
+  assert.equal(listedStylist?.name, `${originalName} Updated`);
   assert.deepEqual(listedStylist?.schedule, originalSchedule);
 
   const blank = await updateStylistName(marcoId, "   ");
@@ -362,6 +391,84 @@ test("different employees return different slots for the same date", async () =>
   assert.deepEqual(marco.body[0]?.slots, ["10:00 AM", "11:30 AM", "1:00 PM"]);
   assert.deepEqual(aisha.body[0]?.slots, ["2:00 PM", "3:30 PM", "5:00 PM"]);
   assert.notDeepEqual(marco.body[0]?.slots, aisha.body[0]?.slots);
+});
+
+test("recurring breaks are saved and remove overlapping appointment starts", async () => {
+  const schedule: StylistScheduleEntry[] = [{
+    dayOfWeek: 1,
+    openTime: "10:00",
+    closeTime: "18:00",
+    breaks: [{ startTime: "11:45", endTime: "13:00" }],
+  }];
+  await updateSchedule(marcoId, schedule);
+
+  const listed = await request<Array<{ id: number; schedule: StylistScheduleEntry[] }>>("/api/stylists");
+  assert.deepEqual(listed.body.find((stylist) => stylist.id === marcoId)?.schedule, schedule);
+
+  const availability = await request<Array<{ slots: string[] }>>(
+    `/api/availability?date=${testDate}&stylistId=${marcoId}&serviceId=${signatureCutId}`,
+  );
+  assert.equal(availability.response.status, 200);
+  assert.deepEqual(availability.body[0]?.slots, ["10:00 AM", "1:00 PM", "2:30 PM", "4:00 PM"]);
+});
+
+test("break validation rejects invalid and overlapping intervals", async () => {
+  const invalidSchedules: StylistScheduleEntry[][] = [
+    [{
+      dayOfWeek: 1,
+      openTime: "10:00",
+      closeTime: "18:00",
+      breaks: [{ startTime: "14:00", endTime: "13:00" }],
+    }],
+    [{
+      dayOfWeek: 1,
+      openTime: "10:00",
+      closeTime: "18:00",
+      breaks: [{ startTime: "09:00", endTime: "10:30" }],
+    }],
+    [{
+      dayOfWeek: 1,
+      openTime: "10:00",
+      closeTime: "18:00",
+      breaks: [
+        { startTime: "12:00", endTime: "13:00" },
+        { startTime: "12:30", endTime: "13:30" },
+      ],
+    }],
+  ];
+
+  for (const schedule of invalidSchedules) {
+    const result = await request<{ error: string }>(`/api/stylists/${marcoId}/schedule`, {
+      method: "PATCH",
+      headers: managerHeaders,
+      body: JSON.stringify({ schedule }),
+    });
+    assert.equal(result.response.status, 400);
+  }
+});
+
+test("appointment creation rechecks recurring break conflicts", async () => {
+  await updateSchedule(marcoId, [{
+    dayOfWeek: 1,
+    openTime: "10:00",
+    closeTime: "18:00",
+    breaks: [{ startTime: "11:45", endTime: "13:00" }],
+  }]);
+
+  const appointment = await request<{ error: string }>("/api/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      serviceId: signatureCutId,
+      stylistId: marcoId,
+      customerName: "Break Conflict",
+      email: testEmail,
+      phone: "+971500000000",
+      date: testDate,
+      time: "11:30 AM",
+    }),
+  });
+  assert.equal(appointment.response.status, 400);
+  assert.equal(appointment.body.error, "That employee is on a break at the selected time.");
 });
 
 test("closed schedule days return no availability", async () => {
@@ -443,4 +550,13 @@ test("booked slots disappear and valid appointment creation succeeds", async () 
   );
   assert.equal(afterBooking.response.status, 200);
   assert.ok(!afterBooking.body[0]?.slots.includes("10:00 AM"));
+});
+
+test("services referenced by appointments cannot be deleted", async () => {
+  const result = await deleteService(signatureCutId);
+  assert.equal(result.response.status, 409);
+  assert.equal(
+    result.body?.error,
+    "This service cannot be deleted because it has existing appointments.",
+  );
 });

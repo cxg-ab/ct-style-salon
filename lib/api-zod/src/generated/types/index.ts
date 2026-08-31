@@ -18,6 +18,7 @@ export * from './service';
 export * from './serviceInput';
 export * from './serviceUpdate';
 export * from './stylist';
+export * from './stylistBreak';
 export * from './stylistScheduleEntry';
 export * from './stylistScheduleUpdate';
 export * from './stylistUpdate';

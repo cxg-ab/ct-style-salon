@@ -361,6 +361,77 @@ export const useUpdateService = <TError = ErrorType<ErrorResponse>,
       return useMutation(getUpdateServiceMutationOptions(options));
     }
 
+export const getDeleteServiceUrl = (serviceId: number,) => {
+
+
+
+
+  return `/api/services/${serviceId}`
+}
+
+/**
+ * @summary Delete a salon service
+ */
+export const deleteService = async (serviceId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteServiceUrl(serviceId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteServiceMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteService>>, TError,{serviceId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteService>>, TError,{serviceId: number}, TContext> => {
+
+const mutationKey = ['deleteService'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteService>>, {serviceId: number}> = (props) => {
+          const {serviceId} = props ?? {};
+
+          return  deleteService(serviceId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteServiceMutationResult = NonNullable<Awaited<ReturnType<typeof deleteService>>>
+
+    export type DeleteServiceMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete a salon service
+ */
+export const useDeleteService = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteService>>, TError,{serviceId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteService>>,
+        TError,
+        {serviceId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteServiceMutationOptions(options));
+    }
+
 export const getListStylistsUrl = () => {
 
 
