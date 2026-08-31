@@ -7,11 +7,13 @@ import {
   appointmentsTable,
   db,
   pool,
+  servicesTable,
 } from "@workspace/db";
 import type { StylistScheduleEntry } from "../lib/salon-seed";
 
 const testDate = "2099-09-07";
 const testEmail = "schedule-regression@example.com";
+const serviceTestName = "Automated Service Regression";
 const managerHeaders = { "x-salon-manager": "true" };
 let server: Server;
 let baseUrl = "";
@@ -19,6 +21,7 @@ let marcoId: number;
 let aishaId: number;
 let danielId: number;
 let signatureCutId: number;
+let createdServiceId: number | undefined;
 let originalSchedules = new Map<number, StylistScheduleEntry[]>();
 
 type ApiResult<T> = {
@@ -53,6 +56,27 @@ async function updateSchedule(
     body: JSON.stringify({ schedule }),
   });
   assert.equal(result.response.status, 200);
+}
+
+const servicePayload = {
+  name: serviceTestName,
+  description: "A service created by the API regression suite.",
+  durationMinutes: 45,
+  price: 125,
+  category: "Regression",
+  featured: false,
+};
+
+async function updateService(
+  serviceId: number,
+  payload: Partial<typeof servicePayload>,
+  headers: Record<string, string> = managerHeaders,
+): Promise<ApiResult<Record<string, unknown>>> {
+  return request(`/api/services/${serviceId}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(payload),
+  });
 }
 
 function scheduleWithMonday(
@@ -99,10 +123,186 @@ after(async () => {
     await updateSchedule(stylistId, schedule);
   }
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, testEmail));
+  if (createdServiceId) {
+    await db.delete(servicesTable).where(eq(servicesTable.id, createdServiceId));
+  }
   await new Promise<void>((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
   await pool.end();
+});
+
+test("manager can create a service and the service persists in the listing", async () => {
+  const created = await request<{
+    id: number;
+    name: string;
+    durationMinutes: number;
+    price: number;
+    category: string;
+    featured: boolean;
+  }>("/api/services", {
+    method: "POST",
+    headers: managerHeaders,
+    body: JSON.stringify(servicePayload),
+  });
+
+  assert.equal(created.response.status, 201);
+  assert.equal(created.body.name, serviceTestName);
+  assert.equal(created.body.durationMinutes, 45);
+  assert.equal(created.body.price, 125);
+  assert.equal(created.body.category, "Regression");
+  assert.equal(created.body.featured, false);
+  createdServiceId = created.body.id;
+
+  const listed = await request<
+    Array<{
+      id: number;
+      name: string;
+      description: string;
+      durationMinutes: number;
+      price: number;
+      category: string;
+      featured: boolean;
+    }>
+  >("/api/services");
+  assert.equal(listed.response.status, 200);
+  assert.deepEqual(
+    listed.body.find((service) => service.id === createdServiceId),
+    {
+      id: createdServiceId,
+      name: serviceTestName,
+      description: servicePayload.description,
+      durationMinutes: 45,
+      price: 125,
+      category: "Regression",
+      featured: false,
+    },
+  );
+});
+
+test("manager can update a service and the changes persist", async () => {
+  assert.ok(createdServiceId);
+  const payload = {
+    ...servicePayload,
+    name: "Updated Automated Service",
+    description: "The persisted update from the API regression suite.",
+    durationMinutes: 75,
+    price: 130.5,
+    category: "Updated Regression",
+    featured: true,
+  };
+
+  const updated = await updateService(createdServiceId, payload);
+  assert.equal(updated.response.status, 200);
+  assert.deepEqual(updated.body, {
+    id: createdServiceId,
+    ...payload,
+  });
+
+  const listed = await request<
+    Array<{
+      id: number;
+      name: string;
+      description: string;
+      durationMinutes: number;
+      price: number;
+      category: string;
+      featured: boolean;
+    }>
+  >("/api/services");
+  assert.equal(listed.response.status, 200);
+  assert.deepEqual(
+    listed.body.find((service) => service.id === createdServiceId),
+    { id: createdServiceId, ...payload },
+  );
+});
+
+test("service management rejects unauthenticated requests", async () => {
+  const create = await request<{ error: string }>("/api/services", {
+    method: "POST",
+    body: JSON.stringify(servicePayload),
+  });
+  assert.equal(create.response.status, 403);
+  assert.equal(create.body.error, "Manager access is required to update services.");
+
+  const update = await updateService(createdServiceId ?? 999999, servicePayload, {});
+  assert.equal(update.response.status, 403);
+  assert.equal(update.body.error, "Manager access is required to update services.");
+});
+
+test("service management rejects incomplete requests", async () => {
+  const incomplete = {
+    name: "Incomplete Service",
+    durationMinutes: 45,
+    price: 100,
+    category: "Regression",
+    featured: false,
+  };
+
+  const create = await request<{ error: string }>("/api/services", {
+    method: "POST",
+    headers: managerHeaders,
+    body: JSON.stringify(incomplete),
+  });
+  assert.equal(create.response.status, 400);
+  assert.equal(
+    create.body.error,
+    "Enter a complete service with a valid duration and price.",
+  );
+
+  const update = await updateService(createdServiceId ?? 999999, incomplete);
+  assert.equal(update.response.status, 400);
+  assert.equal(
+    update.body.error,
+    "Enter a complete service with a valid duration and price.",
+  );
+});
+
+test("service management rejects non-positive durations", async () => {
+  const invalid = { ...servicePayload, durationMinutes: 0 };
+  const negative = { ...servicePayload, durationMinutes: -15 };
+
+  for (const payload of [invalid, negative]) {
+    const create = await request<{ error: string }>("/api/services", {
+      method: "POST",
+      headers: managerHeaders,
+      body: JSON.stringify(payload),
+    });
+    assert.equal(create.response.status, 400);
+    assert.equal(
+      create.body.error,
+      "Enter a complete service with a valid duration and price.",
+    );
+
+    const update = await updateService(createdServiceId ?? 999999, payload);
+    assert.equal(update.response.status, 400);
+    assert.equal(
+      update.body.error,
+      "Enter a complete service with a valid duration and price.",
+    );
+  }
+});
+
+test("service management rejects malformed prices", async () => {
+  const invalid = { ...servicePayload, price: 100.125 };
+
+  const create = await request<{ error: string }>("/api/services", {
+    method: "POST",
+    headers: managerHeaders,
+    body: JSON.stringify(invalid),
+  });
+  assert.equal(create.response.status, 400);
+  assert.equal(
+    create.body.error,
+    "Enter a valid price with no more than two decimal places.",
+  );
+
+  const update = await updateService(createdServiceId ?? 999999, invalid);
+  assert.equal(update.response.status, 400);
+  assert.equal(
+    update.body.error,
+    "Enter a valid price with no more than two decimal places.",
+  );
 });
 
 test("different employees return different slots for the same date", async () => {

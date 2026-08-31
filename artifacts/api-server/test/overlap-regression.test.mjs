@@ -10,6 +10,10 @@ const apiBaseUrl =
 const testEmailPrefix = `overlap-regression-${process.pid}-${Date.now()}`;
 const cleanupSql =
   "DELETE FROM salon_appointments WHERE email LIKE 'overlap-regression-%@example.test';";
+const managerHeaders = {
+  "content-type": "application/json",
+  "x-salon-manager": "true",
+};
 
 let apiProcess;
 let shortService;
@@ -73,6 +77,22 @@ async function createAppointment({ serviceId, date, time, label }) {
   });
 }
 
+async function updateService(service, changes) {
+  return request(`/services/${service.id}`, {
+    method: "PATCH",
+    headers: managerHeaders,
+    body: JSON.stringify({
+      name: service.name,
+      description: service.description,
+      durationMinutes: service.durationMinutes,
+      price: service.price,
+      category: service.category,
+      featured: service.featured,
+      ...changes,
+    }),
+  });
+}
+
 before(async () => {
   cleanupTestAppointments();
 
@@ -100,6 +120,12 @@ before(async () => {
 after(async () => {
   try {
     cleanupTestAppointments();
+    if (longService) {
+      const restored = await updateService(longService, {
+        durationMinutes: longService.durationMinutes,
+      });
+      assert.equal(restored.response.status, 200);
+    }
   } finally {
     if (apiProcess) {
       apiProcess.kill("SIGTERM");
@@ -126,6 +152,53 @@ test("a longer service removes slots overlapping an existing shorter service", a
   assert.ok(slots.includes("10:00 AM"));
   assert.ok(slots.includes("1:00 PM"));
   assert.ok(!slots.includes("11:30 AM"));
+});
+
+test("updating a service duration changes availability without permitting overlaps", async () => {
+  const date = "2099-01-08";
+  try {
+    const created = await createAppointment({
+      serviceId: shortService.id,
+      date,
+      time: "11:30 AM",
+      label: "duration-update-blocker",
+    });
+    assert.equal(created.response.status, 201);
+
+    const beforeUpdate = await request(
+      `/availability?date=${date}&stylistId=${marco.id}&serviceId=${longService.id}`,
+    );
+    assert.equal(beforeUpdate.response.status, 200);
+    assert.ok(beforeUpdate.body[0].slots.includes("10:00 AM"));
+
+    const updated = await updateService(longService, { durationMinutes: 120 });
+    assert.equal(updated.response.status, 200);
+    assert.equal(updated.body.durationMinutes, 120);
+
+    const afterUpdate = await request(
+      `/availability?date=${date}&stylistId=${marco.id}&serviceId=${longService.id}`,
+    );
+    assert.equal(afterUpdate.response.status, 200);
+    assert.ok(!afterUpdate.body[0].slots.includes("10:00 AM"));
+    assert.ok(afterUpdate.body[0].slots.includes("1:00 PM"));
+
+    const overlapping = await createAppointment({
+      serviceId: longService.id,
+      date,
+      time: "10:00 AM",
+      label: "duration-update-overlap-attempt",
+    });
+    assert.equal(overlapping.response.status, 400);
+    assert.equal(
+      overlapping.body.error,
+      "That time was just booked. Please choose another slot.",
+    );
+  } finally {
+    const restored = await updateService(longService, {
+      durationMinutes: longService.durationMinutes,
+    });
+    assert.equal(restored.response.status, 200);
+  }
 });
 
 test("an appointment ending at a candidate start remains bookable", async () => {
