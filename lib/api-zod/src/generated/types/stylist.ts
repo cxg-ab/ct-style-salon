@@ -6,6 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface Stylist {
+  id: number;
+  name: string;
+  role: string;
+  bio: string;
+  initials: string;
+  accent: string;
 }

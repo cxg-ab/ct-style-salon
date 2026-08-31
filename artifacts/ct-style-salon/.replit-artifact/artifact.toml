@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "CT Style Salon"
+description = "A polished barber and salon booking app for CT Style Salon, with service browsing, stylist discovery, appointment scheduling, and a simple salon overview for clients."
+version = "1.0.0"
+id = "artifacts/ct-style-salon"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21983
+
+[services.development]
+run = "pnpm --filter @workspace/ct-style-salon run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ct-style-salon", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/ct-style-salon/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21983"
+BASE_PATH = "/"

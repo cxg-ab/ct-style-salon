@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: salon
+    description: Salon booking operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,117 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /services:
+    get:
+      operationId: listServices
+      tags: [salon]
+      summary: List salon services
+      responses:
+        "200":
+          description: Available salon services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Service"
+  /stylists:
+    get:
+      operationId: listStylists
+      tags: [salon]
+      summary: List salon stylists
+      responses:
+        "200":
+          description: Available stylists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Stylist"
+  /availability:
+    get:
+      operationId: getAvailability
+      tags: [salon]
+      summary: Get appointment time slots for a date
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Available time slots grouped by stylist
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Availability"
+        "400":
+          description: Invalid date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /appointments:
+    get:
+      operationId: listAppointments
+      tags: [salon]
+      summary: List appointments for a guest email
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+      responses:
+        "200":
+          description: Guest appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Appointment"
+    post:
+      operationId: createAppointment
+      tags: [salon]
+      summary: Create an appointment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppointmentInput"
+      responses:
+        "201":
+          description: Appointment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          description: Invalid or unavailable appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /salon-summary:
+    get:
+      operationId: getSalonSummary
+      tags: [salon]
+      summary: Get a lightweight salon summary
+      responses:
+        "200":
+          description: Salon summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalonSummary"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +146,169 @@ components:
           type: string
       required:
         - status
+    Service:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        durationMinutes:
+          type: integer
+        price:
+          type: number
+        category:
+          type: string
+        featured:
+          type: boolean
+      required:
+        - id
+        - name
+        - description
+        - durationMinutes
+        - price
+        - category
+        - featured
+    Stylist:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        role:
+          type: string
+        bio:
+          type: string
+        initials:
+          type: string
+        accent:
+          type: string
+      required:
+        - id
+        - name
+        - role
+        - bio
+        - initials
+        - accent
+    Availability:
+      type: object
+      properties:
+        stylistId:
+          type: integer
+        date:
+          type: string
+          format: date
+        slots:
+          type: array
+          items:
+            type: string
+      required:
+        - stylistId
+        - date
+        - slots
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: integer
+        serviceId:
+          type: integer
+        serviceName:
+          type: string
+        stylistId:
+          type: integer
+        stylistName:
+          type: string
+        customerName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+        notes:
+          type: ["string", "null"]
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - serviceId
+        - serviceName
+        - stylistId
+        - stylistName
+        - customerName
+        - email
+        - phone
+        - date
+        - time
+        - notes
+        - status
+        - createdAt
+    AppointmentInput:
+      type: object
+      properties:
+        serviceId:
+          type: integer
+        stylistId:
+          type: integer
+        customerName:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          minLength: 7
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+        notes:
+          type: ["string", "null"]
+      required:
+        - serviceId
+        - stylistId
+        - customerName
+        - email
+        - phone
+        - date
+        - time
+    SalonSummary:
+      type: object
+      properties:
+        rating:
+          type: number
+        reviewCount:
+          type: integer
+        nextAvailable:
+          type: string
+        neighborhood:
+          type: string
+        hours:
+          type: string
+      required:
+        - rating
+        - reviewCount
+        - nextAvailable
+        - neighborhood
+        - hours
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
 
