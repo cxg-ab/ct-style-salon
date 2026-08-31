@@ -152,7 +152,7 @@ type AuthenticatedRequest = Request & {
   salonManagerId?: string;
 };
 
-async function requireSalonManager(req: AuthenticatedRequest, res: Response): Promise<boolean> {
+export async function requireSalonManager(req: AuthenticatedRequest, res: Response): Promise<boolean> {
   const auth = getAuth(req);
   const userId = auth?.userId;
   const testManager =
@@ -282,6 +282,9 @@ function validateStylistPayload(payload: {
     return "Initials must be five characters or fewer.";
   }
   if (payload.photoUrl) {
+    if (payload.photoUrl.startsWith("/objects/")) {
+      return validateSchedule(payload.schedule);
+    }
     try {
       const url = new URL(payload.photoUrl);
       if (!["http:", "https:"].includes(url.protocol)) {
