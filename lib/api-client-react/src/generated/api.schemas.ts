@@ -19,6 +19,18 @@ export interface Service {
   featured: boolean;
 }
 
+export interface StylistScheduleEntry {
+  /**
+     * @minimum 0
+     * @maximum 6
+     */
+  dayOfWeek: number;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  openTime: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  closeTime: string;
+}
+
 export interface Stylist {
   id: number;
   name: string;
@@ -26,6 +38,12 @@ export interface Stylist {
   bio: string;
   initials: string;
   accent: string;
+  schedule: StylistScheduleEntry[];
+}
+
+export interface StylistScheduleUpdate {
+  /** @maxItems 21 */
+  schedule: StylistScheduleEntry[];
 }
 
 export interface Availability {

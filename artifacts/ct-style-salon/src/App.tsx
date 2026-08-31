@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   ArrowRight,
@@ -33,6 +33,9 @@ import {
   useListAppointments,
   useListServices,
   useListStylists,
+  useUpdateStylistSchedule,
+  type Stylist,
+  type StylistScheduleEntry,
 } from '@workspace/api-client-react';
 import storefrontImage from '@assets/WhatsApp_Image_2026-08-31_at_11.57.17_1788163048747.jpeg';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -111,6 +114,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <p className="font-mono-ui text-[10px] uppercase tracking-[.22em] text-[hsl(var(--accent))]">Stay in touch</p>
             <p className="mt-4 text-sm text-[hsl(var(--card)/.76)]">Daily · 11:00–22:00</p>
             <a href="https://instagram.com/ct_style_salon" className="mt-3 inline-flex items-center gap-2 text-sm text-[hsl(var(--card)/.76)] hover:text-[hsl(var(--accent))]" data-testid="link-instagram"><Instagram size={14} /> @ct_style_salon</a>
+            <Link href="/manage" className="mt-5 flex items-center gap-2 text-[11px] text-[hsl(var(--card)/.5)] hover:text-[hsl(var(--accent))]" data-testid="link-manager-workspace"><ShieldCheck size={13} /> Manager workspace</Link>
           </div>
         </div>
         <div className="mx-auto flex max-w-[1240px] justify-between border-t border-[hsl(var(--card)/.12)] px-5 py-5 font-mono-ui text-[9px] tracking-[.16em] text-[hsl(var(--card)/.4)] sm:px-8">
@@ -224,6 +228,146 @@ function Home() {
   );
 }
 
+const weekDays = [
+  { value: 1, label: 'Monday', short: 'Mon' },
+  { value: 2, label: 'Tuesday', short: 'Tue' },
+  { value: 3, label: 'Wednesday', short: 'Wed' },
+  { value: 4, label: 'Thursday', short: 'Thu' },
+  { value: 5, label: 'Friday', short: 'Fri' },
+  { value: 6, label: 'Saturday', short: 'Sat' },
+  { value: 0, label: 'Sunday', short: 'Sun' },
+];
+
+function scheduleErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'data' in error) {
+    const data = (error as { data?: unknown }).data;
+    if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') {
+      return data.error;
+    }
+  }
+  return fallback;
+}
+
+function validateScheduleInForm(schedule: StylistScheduleEntry[]) {
+  for (const entry of schedule) {
+    if (entry.openTime >= entry.closeTime) {
+      return 'Each opening time must be earlier than its closing time.';
+    }
+  }
+  for (let index = 0; index < schedule.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < schedule.length; otherIndex += 1) {
+      const entry = schedule[index];
+      const other = schedule[otherIndex];
+      if (entry.dayOfWeek === other.dayOfWeek && entry.openTime < other.closeTime && other.openTime < entry.closeTime) {
+        return 'Working hours cannot overlap on the same day.';
+      }
+    }
+  }
+  return undefined;
+}
+
+function ScheduleEditor({ stylist }: { stylist: Stylist }) {
+  const [schedule, setSchedule] = useState<StylistScheduleEntry[]>(stylist.schedule);
+  const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string }>();
+  const updateSchedule = useUpdateStylistSchedule({
+    request: { headers: { 'x-salon-manager': 'true' } },
+  });
+
+  useEffect(() => {
+    setSchedule(stylist.schedule);
+  }, [stylist.id, stylist.schedule]);
+
+  const entryForDay = (dayOfWeek: number) => schedule.find((entry) => entry.dayOfWeek === dayOfWeek);
+  const updateEntry = (dayOfWeek: number, field: 'openTime' | 'closeTime', value: string) => {
+    setFeedback(undefined);
+    setSchedule((current) => current.map((entry) => entry.dayOfWeek === dayOfWeek ? { ...entry, [field]: value } : entry));
+  };
+  const toggleDay = (dayOfWeek: number, enabled: boolean) => {
+    setFeedback(undefined);
+    setSchedule((current) => {
+      if (!enabled) return current.filter((entry) => entry.dayOfWeek !== dayOfWeek);
+      return [...current, { dayOfWeek, openTime: '10:00', closeTime: '18:00' }].sort((left, right) => left.dayOfWeek - right.dayOfWeek);
+    });
+  };
+  const save = () => {
+    const validationError = validateScheduleInForm(schedule);
+    if (validationError) {
+      setFeedback({ tone: 'error', message: validationError });
+      return;
+    }
+    updateSchedule.mutate(
+      { stylistId: stylist.id, data: { schedule } },
+      {
+        onSuccess: (updatedStylist) => {
+          setSchedule(updatedStylist.schedule);
+          setFeedback({ tone: 'success', message: `${stylist.name}'s schedule is saved.` });
+          queryClient.invalidateQueries({ queryKey: getListStylistsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetAvailabilityQueryKey() });
+        },
+        onError: (error) => {
+          setFeedback({ tone: 'error', message: scheduleErrorMessage(error, 'We could not save this schedule. Check the hours and try again.') });
+        },
+      },
+    );
+  };
+
+  return (
+    <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7" data-testid={`schedule-editor-${stylist.id}`}>
+      <div className="flex flex-col justify-between gap-4 border-b border-[hsl(var(--border))] pb-5 sm:flex-row sm:items-start">
+        <div className="flex items-center gap-4">
+          <span className="grid h-12 w-12 place-items-center rounded-full text-sm font-bold" style={{ backgroundColor: `${stylist.accent}25`, color: stylist.accent }}>{stylist.initials}</span>
+          <div><h2 className="font-display text-3xl">{stylist.name}</h2><p className="mt-1 font-mono-ui text-[9px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">{stylist.role}</p></div>
+        </div>
+        <button type="button" onClick={save} disabled={updateSchedule.isPending} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid={`button-save-schedule-${stylist.id}`}>
+          {updateSchedule.isPending ? 'Saving…' : 'Save schedule'} <Check size={14} />
+        </button>
+      </div>
+      <div className="mt-5 space-y-2">
+        {weekDays.map((day) => {
+          const entry = entryForDay(day.value);
+          return (
+            <div key={day.value} className={`grid items-center gap-3 rounded-xl border p-3 sm:grid-cols-[minmax(140px,1fr)_1fr_1fr] ${entry ? 'border-[hsl(var(--border))] bg-[hsl(var(--background)/.45)]' : 'border-transparent bg-[hsl(var(--muted)/.45)]'}`}>
+              <label className="flex items-center gap-3 text-sm font-semibold">
+                <input type="checkbox" checked={Boolean(entry)} onChange={(event) => toggleDay(day.value, event.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" data-testid={`checkbox-schedule-${stylist.id}-${day.short.toLowerCase()}`} />
+                <span>{day.label}</span>
+              </label>
+              {entry ? (
+                <>
+                  <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">Open
+                    <input type="time" value={entry.openTime} onChange={(event) => updateEntry(day.value, 'openTime', event.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-open-${stylist.id}-${day.short.toLowerCase()}`} />
+                  </label>
+                  <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">Close
+                    <input type="time" value={entry.closeTime} onChange={(event) => updateEntry(day.value, 'closeTime', event.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-close-${stylist.id}-${day.short.toLowerCase()}`} />
+                  </label>
+                </>
+              ) : <span className="font-mono-ui text-[10px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))] sm:col-span-2">Day off</span>}
+            </div>
+          );
+        })}
+      </div>
+      {feedback && <p className={`mt-4 text-sm ${feedback.tone === 'error' ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--secondary))]'}`} role={feedback.tone === 'error' ? 'alert' : 'status'} data-testid={`status-schedule-${stylist.id}`}>{feedback.message}</p>}
+      <p className="mt-4 text-[11px] leading-5 text-[hsl(var(--muted-foreground))]">Booking times are offered every 90 minutes and stop when the selected service would run past closing.</p>
+    </section>
+  );
+}
+
+function ManagerSchedule() {
+  const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
+  const stylists = stylistsQuery.data ?? [];
+  return (
+    <main className="mx-auto max-w-[1000px] px-5 py-14 sm:px-8 md:py-24">
+      <div className="max-w-2xl reveal">
+        <p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">Manager workspace</p>
+        <h1 className="mt-4 font-display text-6xl leading-[.84] sm:text-8xl">Keep the<br /><i>chairs ready.</i></h1>
+        <p className="mt-7 max-w-xl text-base leading-7 text-[hsl(var(--muted-foreground))]">Update each employee’s working days and open hours. Changes are used by booking as soon as you save.</p>
+      </div>
+      <div className="mt-12 space-y-5">
+        {stylistsQuery.isLoading ? <LoadingCards count={3} /> : stylistsQuery.isError ? <ErrorMessage retry={() => stylistsQuery.refetch()} /> : stylists.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No employees are available to schedule.</div> : stylists.map((stylist) => <ScheduleEditor key={stylist.id} stylist={stylist} />)}
+      </div>
+    </main>
+  );
+}
+
 function DateStrip({ date, onChange }: { date: string; onChange: (date: string) => void }) {
   const days = useMemo(() => Array.from({ length: 10 }, (_, index) => { const value = new Date(); value.setHours(12, 0, 0, 0); value.setDate(value.getDate() + index); return value; }), []);
   return <div className="flex gap-2 overflow-x-auto pb-2" data-testid="date-strip">{days.map((day) => { const iso = day.toISOString().slice(0, 10); const selected = iso === date; return <button key={iso} onClick={() => onChange(iso)} className={`min-w-[68px] rounded-xl border px-2 py-3 text-center transition-all ${selected ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[0_8px_18px_hsl(var(--primary)/.18)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.55)]'}`} data-testid={`button-date-${iso}`}><span className="block font-mono-ui text-[9px] uppercase tracking-[.08em] opacity-70">{indexDay(day)}</span><span className="mt-1 block text-xl font-semibold">{day.getDate()}</span><span className="block text-[9px] uppercase opacity-60">{day.toLocaleDateString('en-US', { month: 'short' })}</span></button>; })}</div>;
@@ -300,7 +444,7 @@ function Appointments() {
 
 function Router() {
   const [location] = useLocation();
-  return <ErrorBoundary resetKey={location}><Switch><Route path="/" component={Home} /><Route path="/book" component={Book} /><Route path="/appointments" component={Appointments} /><Route component={NotFound} /></Switch></ErrorBoundary>;
+  return <ErrorBoundary resetKey={location}><Switch><Route path="/" component={Home} /><Route path="/book" component={Book} /><Route path="/appointments" component={Appointments} /><Route path="/manage" component={ManagerSchedule} /><Route component={NotFound} /></Switch></ErrorBoundary>;
 }
 
 function App() {

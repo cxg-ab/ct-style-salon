@@ -1,5 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import {
   CreateAppointmentBody,
   CreateAppointmentResponse,
@@ -10,6 +10,9 @@ import {
   ListAppointmentsResponse,
   ListServicesResponse,
   ListStylistsResponse,
+  UpdateStylistScheduleBody,
+  UpdateStylistScheduleParams,
+  UpdateStylistScheduleResponse,
 } from "@workspace/api-zod";
 import {
   appointmentsTable,
@@ -17,24 +20,14 @@ import {
   servicesTable,
   stylistsTable,
 } from "@workspace/db";
-import { ensureSalonSeeded } from "../lib/salon-seed";
+import {
+  ensureSalonSeeded,
+  getStylistSchedule,
+  setStylistSchedule,
+  type StylistScheduleEntry,
+} from "../lib/salon-seed";
 
 const router: IRouter = Router();
-const stylistSchedules: Record<string, { workingDays: number[]; slots: string[] }> = {
-  Marco: {
-    workingDays: [1, 2, 3, 4, 5, 6],
-    slots: ["10:00 AM", "11:30 AM", "1:00 PM", "2:30 PM", "4:00 PM", "5:30 PM", "7:00 PM"],
-  },
-  Aisha: {
-    workingDays: [0, 1, 2, 3, 5, 6],
-    slots: ["11:00 AM", "12:30 PM", "2:00 PM", "3:30 PM", "5:00 PM", "6:30 PM", "8:00 PM"],
-  },
-  Daniel: {
-    workingDays: [1, 2, 3, 4, 5],
-    slots: ["9:30 AM", "11:00 AM", "12:30 PM", "2:00 PM", "3:30 PM", "5:00 PM", "6:30 PM"],
-  },
-};
-
 type BookedAppointment = {
   time: string;
   durationMinutes: number;
@@ -53,6 +46,69 @@ function timeToMinutes(value: string): number | undefined {
   }
 
   return (hour % 12) * 60 + minute + (match[3] === "PM" ? 12 * 60 : 0);
+}
+
+function scheduleTimeToMinutes(value: string): number {
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function formatSlotTime(totalMinutes: number): string {
+  const hour24 = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+}
+
+function slotsForSchedule(
+  schedule: StylistScheduleEntry[],
+  weekday: number,
+  durationMinutes: number,
+): string[] {
+  const slots = new Set<string>();
+  for (const entry of schedule.filter((item) => item.dayOfWeek === weekday)) {
+    const open = scheduleTimeToMinutes(entry.openTime);
+    const close = scheduleTimeToMinutes(entry.closeTime);
+    for (let start = open; start + durationMinutes <= close; start += 90) {
+      slots.add(formatSlotTime(start));
+    }
+  }
+  return [...slots].sort((left, right) => {
+    return (timeToMinutes(left) ?? 0) - (timeToMinutes(right) ?? 0);
+  });
+}
+
+function validateSchedule(schedule: StylistScheduleEntry[]): string | undefined {
+  for (const entry of schedule) {
+    if (entry.dayOfWeek < 0 || entry.dayOfWeek > 6) {
+      return "Choose a valid working day for every schedule entry.";
+    }
+    const open = scheduleTimeToMinutes(entry.openTime);
+    const close = scheduleTimeToMinutes(entry.closeTime);
+    if (!Number.isFinite(open) || !Number.isFinite(close) || open >= close) {
+      return "Each opening time must be earlier than its closing time.";
+    }
+  }
+
+  for (let index = 0; index < schedule.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < schedule.length; otherIndex += 1) {
+      const entry = schedule[index];
+      const other = schedule[otherIndex];
+      if (
+        entry.dayOfWeek === other.dayOfWeek &&
+        scheduleTimeToMinutes(entry.openTime) < scheduleTimeToMinutes(other.closeTime) &&
+        scheduleTimeToMinutes(other.openTime) < scheduleTimeToMinutes(entry.closeTime)
+      ) {
+        return "Working hours cannot overlap on the same day.";
+      }
+    }
+  }
+  return undefined;
+}
+
+function isSalonManager(req: Request): boolean {
+  return req.header("x-salon-manager") === "true";
 }
 
 function appointmentTimesOverlap(
@@ -107,7 +163,48 @@ router.get("/services", async (_req, res): Promise<void> => {
 router.get("/stylists", async (_req, res): Promise<void> => {
   await ensureSalonSeeded();
   const rows = await db.select().from(stylistsTable).orderBy(stylistsTable.id);
-  res.json(ListStylistsResponse.parse(rows));
+  res.json(
+    ListStylistsResponse.parse(
+      rows.map((row) => ({ ...row, schedule: getStylistSchedule(row.name) })),
+    ),
+  );
+});
+
+router.patch("/stylists/:stylistId/schedule", async (req, res): Promise<void> => {
+  if (!isSalonManager(req)) {
+    res.status(403).json({ error: "Manager access is required to update employee schedules." });
+    return;
+  }
+
+  await ensureSalonSeeded();
+  const params = UpdateStylistScheduleParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Choose a valid employee." });
+    return;
+  }
+  const body = UpdateStylistScheduleBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Use valid opening and closing times for every working day." });
+    return;
+  }
+  const validationError = validateSchedule(body.data.schedule);
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
+
+  const [stylist] = await db
+    .select()
+    .from(stylistsTable)
+    .where(eq(stylistsTable.id, params.data.stylistId))
+    .limit(1);
+  if (!stylist) {
+    res.status(404).json({ error: "Employee not found." });
+    return;
+  }
+
+  const schedule = setStylistSchedule(stylist.name, body.data.schedule);
+  res.json(UpdateStylistScheduleResponse.parse({ ...stylist, schedule }));
 });
 
 router.get("/availability", async (req, res): Promise<void> => {
@@ -164,13 +261,13 @@ router.get("/availability", async (req, res): Promise<void> => {
     bookedByStylist.set(appointment.stylistId, appointments);
   }
 
-  const schedule = stylistSchedules[stylist.name];
+  const schedule = getStylistSchedule(stylist.name);
   const weekday = parsed.data.date.getUTCDay();
   const output = [{
     stylistId: stylist.id,
     date: parsed.data.date,
-    slots: schedule?.workingDays.includes(weekday)
-      ? schedule.slots.filter(
+    slots: schedule.length > 0
+      ? slotsForSchedule(schedule, weekday, service.durationMinutes).filter(
           (slot) =>
             !bookedByStylist
               .get(stylist.id)
@@ -243,9 +340,9 @@ router.post("/appointments", async (req, res): Promise<void> => {
     return;
   }
 
-  const schedule = stylistSchedules[stylist[0].name];
+  const schedule = getStylistSchedule(stylist[0].name);
   const weekday = body.data.date.getUTCDay();
-  if (!schedule?.workingDays.includes(weekday) || !schedule.slots.includes(body.data.time)) {
+  if (!slotsForSchedule(schedule, weekday, service[0].durationMinutes).includes(body.data.time)) {
     res.status(400).json({ error: "That employee is not scheduled for the selected time." });
     return;
   }

@@ -29,7 +29,8 @@ import type {
   ListAppointmentsParams,
   SalonSummary,
   Service,
-  Stylist
+  Stylist,
+  StylistScheduleUpdate
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -290,6 +291,78 @@ export function useListStylists<TData = Awaited<ReturnType<typeof listStylists>>
 
 
 
+
+export const getUpdateStylistScheduleUrl = (stylistId: number,) => {
+
+
+
+
+  return `/api/stylists/${stylistId}/schedule`
+}
+
+/**
+ * @summary Update an employee's working schedule
+ */
+export const updateStylistSchedule = async (stylistId: number,
+    stylistScheduleUpdate: StylistScheduleUpdate, options?: Parameters<typeof customFetch>[1]): Promise<Stylist> => {
+
+  return customFetch<Stylist>(getUpdateStylistScheduleUrl(stylistId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(stylistScheduleUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateStylistScheduleMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStylistSchedule>>, TError,{stylistId: number;data: BodyType<StylistScheduleUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateStylistSchedule>>, TError,{stylistId: number;data: BodyType<StylistScheduleUpdate>}, TContext> => {
+
+const mutationKey = ['updateStylistSchedule'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateStylistSchedule>>, {stylistId: number;data: BodyType<StylistScheduleUpdate>}> = (props) => {
+          const {stylistId,data} = props ?? {};
+
+          return  updateStylistSchedule(stylistId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateStylistScheduleMutationResult = NonNullable<Awaited<ReturnType<typeof updateStylistSchedule>>>
+    export type UpdateStylistScheduleMutationBody = BodyType<StylistScheduleUpdate>
+    export type UpdateStylistScheduleMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update an employee's working schedule
+ */
+export const useUpdateStylistSchedule = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateStylistSchedule>>, TError,{stylistId: number;data: BodyType<StylistScheduleUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateStylistSchedule>>,
+        TError,
+        {stylistId: number;data: BodyType<StylistScheduleUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateStylistScheduleMutationOptions(options));
+    }
 
 export const getGetAvailabilityUrl = (params: GetAvailabilityParams,) => {
   const normalizedParams = new URLSearchParams();

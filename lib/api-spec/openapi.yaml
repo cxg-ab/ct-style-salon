@@ -54,6 +54,50 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Stylist"
+  /stylists/{stylistId}/schedule:
+    patch:
+      operationId: updateStylistSchedule
+      tags: [salon]
+      summary: Update an employee's working schedule
+      security:
+        - SalonManager: []
+      parameters:
+        - name: stylistId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StylistScheduleUpdate"
+      responses:
+        "200":
+          description: Updated employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stylist"
+        "400":
+          description: Invalid or overlapping schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Manager access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Employee not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /availability:
     get:
       operationId: getAvailability
@@ -196,6 +240,10 @@ components:
           type: string
         accent:
           type: string
+        schedule:
+          type: array
+          items:
+            $ref: "#/components/schemas/StylistScheduleEntry"
       required:
         - id
         - name
@@ -203,6 +251,34 @@ components:
         - bio
         - initials
         - accent
+        - schedule
+    StylistScheduleEntry:
+      type: object
+      properties:
+        dayOfWeek:
+          type: integer
+          minimum: 0
+          maximum: 6
+        openTime:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        closeTime:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+      required:
+        - dayOfWeek
+        - openTime
+        - closeTime
+    StylistScheduleUpdate:
+      type: object
+      properties:
+        schedule:
+          type: array
+          maxItems: 21
+          items:
+            $ref: "#/components/schemas/StylistScheduleEntry"
+      required:
+        - schedule
     Availability:
       type: object
       properties:
@@ -321,4 +397,9 @@ components:
           type: string
       required:
         - error
+  securitySchemes:
+    SalonManager:
+      type: apiKey
+      in: header
+      name: X-Salon-Manager
 

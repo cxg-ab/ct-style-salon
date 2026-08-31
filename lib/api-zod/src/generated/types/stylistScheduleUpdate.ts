@@ -7,12 +7,7 @@
  */
 import type { StylistScheduleEntry } from './stylistScheduleEntry';
 
-export interface Stylist {
-  id: number;
-  name: string;
-  role: string;
-  bio: string;
-  initials: string;
-  accent: string;
+export interface StylistScheduleUpdate {
+  /** @maxItems 21 */
   schedule: StylistScheduleEntry[];
 }

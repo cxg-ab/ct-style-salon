@@ -35,15 +35,73 @@ export const ListServicesResponse = zod.array(ListServicesResponseItem)
 /**
  * @summary List salon stylists
  */
+export const listStylistsResponseScheduleItemDayOfWeekMin = 0;
+export const listStylistsResponseScheduleItemDayOfWeekMax = 6;
+
+export const listStylistsResponseScheduleItemOpenTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const listStylistsResponseScheduleItemCloseTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+
+
 export const ListStylistsResponseItem = zod.object({
   "id": zod.int(),
   "name": zod.string(),
   "role": zod.string(),
   "bio": zod.string(),
   "initials": zod.string(),
-  "accent": zod.string()
+  "accent": zod.string(),
+  "schedule": zod.array(zod.object({
+  "dayOfWeek": zod.int().min(listStylistsResponseScheduleItemDayOfWeekMin).max(listStylistsResponseScheduleItemDayOfWeekMax),
+  "openTime": zod.string().regex(listStylistsResponseScheduleItemOpenTimeRegExp),
+  "closeTime": zod.string().regex(listStylistsResponseScheduleItemCloseTimeRegExp)
+}))
 })
 export const ListStylistsResponse = zod.array(ListStylistsResponseItem)
+
+
+/**
+ * @summary Update an employee's working schedule
+ */
+export const UpdateStylistScheduleParams = zod.object({
+  "stylistId": zod.coerce.number().int()
+})
+
+export const updateStylistScheduleBodyScheduleItemDayOfWeekMin = 0;
+export const updateStylistScheduleBodyScheduleItemDayOfWeekMax = 6;
+
+export const updateStylistScheduleBodyScheduleItemOpenTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const updateStylistScheduleBodyScheduleItemCloseTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const updateStylistScheduleBodyScheduleMax = 21;
+
+
+
+export const UpdateStylistScheduleBody = zod.object({
+  "schedule": zod.array(zod.object({
+  "dayOfWeek": zod.int().min(updateStylistScheduleBodyScheduleItemDayOfWeekMin).max(updateStylistScheduleBodyScheduleItemDayOfWeekMax),
+  "openTime": zod.string().regex(updateStylistScheduleBodyScheduleItemOpenTimeRegExp),
+  "closeTime": zod.string().regex(updateStylistScheduleBodyScheduleItemCloseTimeRegExp)
+})).max(updateStylistScheduleBodyScheduleMax)
+})
+
+export const updateStylistScheduleResponseScheduleItemDayOfWeekMin = 0;
+export const updateStylistScheduleResponseScheduleItemDayOfWeekMax = 6;
+
+export const updateStylistScheduleResponseScheduleItemOpenTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+export const updateStylistScheduleResponseScheduleItemCloseTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+
+
+export const UpdateStylistScheduleResponse = zod.object({
+  "id": zod.int(),
+  "name": zod.string(),
+  "role": zod.string(),
+  "bio": zod.string(),
+  "initials": zod.string(),
+  "accent": zod.string(),
+  "schedule": zod.array(zod.object({
+  "dayOfWeek": zod.int().min(updateStylistScheduleResponseScheduleItemDayOfWeekMin).max(updateStylistScheduleResponseScheduleItemDayOfWeekMax),
+  "openTime": zod.string().regex(updateStylistScheduleResponseScheduleItemOpenTimeRegExp),
+  "closeTime": zod.string().regex(updateStylistScheduleResponseScheduleItemCloseTimeRegExp)
+}))
+})
 
 
 /**
