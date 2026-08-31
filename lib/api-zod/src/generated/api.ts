@@ -16,6 +16,7 @@ export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
 
+
 /**
  * @summary List salon services
  */
@@ -128,6 +129,7 @@ export const ListStylistsResponseItem = zod.object({
   "bio": zod.string(),
   "initials": zod.string(),
   "accent": zod.string(),
+  "photoUrl": zod.url().nullish(),
   "active": zod.boolean(),
   "schedule": zod.array(zod.object({
   "dayOfWeek": zod.int().min(listStylistsResponseScheduleItemDayOfWeekMin).max(listStylistsResponseScheduleItemDayOfWeekMax),
@@ -170,6 +172,7 @@ export const CreateStylistBody = zod.object({
   "bio": zod.string().min(1),
   "initials": zod.string().min(1).max(createStylistBodyInitialsMax),
   "accent": zod.string().min(1),
+  "photoUrl": zod.url().nullish(),
   "schedule": zod.array(zod.object({
   "dayOfWeek": zod.int().min(createStylistBodyScheduleItemDayOfWeekMin).max(createStylistBodyScheduleItemDayOfWeekMax),
   "openTime": zod.string().regex(createStylistBodyScheduleItemOpenTimeRegExp),
@@ -199,6 +202,7 @@ export const CreateStylistResponse = zod.object({
   "bio": zod.string(),
   "initials": zod.string(),
   "accent": zod.string(),
+  "photoUrl": zod.url().nullish(),
   "active": zod.boolean(),
   "schedule": zod.array(zod.object({
   "dayOfWeek": zod.int().min(createStylistResponseScheduleItemDayOfWeekMin).max(createStylistResponseScheduleItemDayOfWeekMax),
@@ -244,6 +248,7 @@ export const UpdateStylistBody = zod.object({
   "bio": zod.string().min(1),
   "initials": zod.string().min(1).max(updateStylistBodyInitialsMax),
   "accent": zod.string().min(1),
+  "photoUrl": zod.url().nullish(),
   "schedule": zod.array(zod.object({
   "dayOfWeek": zod.int().min(updateStylistBodyScheduleItemDayOfWeekMin).max(updateStylistBodyScheduleItemDayOfWeekMax),
   "openTime": zod.string().regex(updateStylistBodyScheduleItemOpenTimeRegExp),
@@ -273,6 +278,7 @@ export const UpdateStylistResponse = zod.object({
   "bio": zod.string(),
   "initials": zod.string(),
   "accent": zod.string(),
+  "photoUrl": zod.url().nullish(),
   "active": zod.boolean(),
   "schedule": zod.array(zod.object({
   "dayOfWeek": zod.int().min(updateStylistResponseScheduleItemDayOfWeekMin).max(updateStylistResponseScheduleItemDayOfWeekMax),
@@ -312,6 +318,7 @@ export const DeleteStylistResponse = zod.object({
   "bio": zod.string(),
   "initials": zod.string(),
   "accent": zod.string(),
+  "photoUrl": zod.url().nullish(),
   "active": zod.boolean(),
   "schedule": zod.array(zod.object({
   "dayOfWeek": zod.int().min(deleteStylistResponseScheduleItemDayOfWeekMin).max(deleteStylistResponseScheduleItemDayOfWeekMax),
@@ -375,6 +382,7 @@ export const UpdateStylistScheduleResponse = zod.object({
   "bio": zod.string(),
   "initials": zod.string(),
   "accent": zod.string(),
+  "photoUrl": zod.url().nullish(),
   "active": zod.boolean(),
   "schedule": zod.array(zod.object({
   "dayOfWeek": zod.int().min(updateStylistScheduleResponseScheduleItemDayOfWeekMin).max(updateStylistScheduleResponseScheduleItemDayOfWeekMax),
@@ -508,4 +516,5 @@ export const GetSalonSummaryResponse = zod.object({
   "neighborhood": zod.string(),
   "hours": zod.string()
 })
+
 

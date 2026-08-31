@@ -21,6 +21,7 @@ export interface StylistInput {
   initials: string;
   /** @minLength 1 */
   accent: string;
+  photoUrl?: string | null;
   /** @maxItems 21 */
   schedule: StylistScheduleEntry[];
 }

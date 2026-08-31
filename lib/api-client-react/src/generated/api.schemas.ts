@@ -75,6 +75,7 @@ export interface Stylist {
   bio: string;
   initials: string;
   accent: string;
+  photoUrl?: string | null;
   active: boolean;
   schedule: StylistScheduleEntry[];
 }
@@ -93,6 +94,7 @@ export interface StylistInput {
   initials: string;
   /** @minLength 1 */
   accent: string;
+  photoUrl?: string | null;
   /** @maxItems 21 */
   schedule: StylistScheduleEntry[];
 }
@@ -111,6 +113,7 @@ export interface StylistUpdate {
   initials: string;
   /** @minLength 1 */
   accent: string;
+  photoUrl?: string | null;
   /** @maxItems 21 */
   schedule: StylistScheduleEntry[];
 }
@@ -200,3 +203,4 @@ serviceIds: number[];
 export type ListAppointmentsParams = {
 email: string;
 };
+

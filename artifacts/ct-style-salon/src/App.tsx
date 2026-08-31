@@ -542,6 +542,7 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
           bio: stylist.bio,
           initials: stylist.initials,
           accent: stylist.accent,
+          photoUrl: stylist.photoUrl,
           schedule: stylist.schedule,
         },
       },

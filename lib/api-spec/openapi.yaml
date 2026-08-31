@@ -529,6 +529,10 @@ components:
           type: string
         accent:
           type: string
+        photoUrl:
+          type: string
+          format: uri
+          nullable: true
         active:
           type: boolean
         schedule:
@@ -563,6 +567,10 @@ components:
         accent:
           type: string
           minLength: 1
+        photoUrl:
+          type: string
+          format: uri
+          nullable: true
         schedule:
           type: array
           maxItems: 21
@@ -594,6 +602,10 @@ components:
         accent:
           type: string
           minLength: 1
+        photoUrl:
+          type: string
+          format: uri
+          nullable: true
         schedule:
           type: array
           maxItems: 21

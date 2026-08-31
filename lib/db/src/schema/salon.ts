@@ -29,6 +29,7 @@ export const stylistsTable = pgTable("salon_stylists", {
   bio: text("bio").notNull(),
   initials: text("initials").notNull(),
   accent: text("accent").notNull(),
+  photoUrl: text("photo_url"),
   schedule: jsonb("schedule")
     .$type<
       Array<{

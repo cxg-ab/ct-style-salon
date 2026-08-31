@@ -135,6 +135,13 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+
 export const getListServicesUrl = () => {
 
 
@@ -205,6 +212,13 @@ export function useListServices<TData = Awaited<ReturnType<typeof listServices>>
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+
 export const getCreateServiceUrl = () => {
 
 

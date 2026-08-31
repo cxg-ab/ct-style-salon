@@ -14,6 +14,7 @@ export interface Stylist {
   bio: string;
   initials: string;
   accent: string;
+  photoUrl?: string | null;
   active: boolean;
   schedule: StylistScheduleEntry[];
 }

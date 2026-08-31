@@ -266,6 +266,7 @@ function validateStylistPayload(payload: {
   bio: string;
   initials: string;
   accent: string;
+  photoUrl?: string | null;
   schedule: StylistScheduleEntry[];
 }): string | undefined {
   if (
@@ -279,6 +280,16 @@ function validateStylistPayload(payload: {
   }
   if (payload.initials.trim().length > 5) {
     return "Initials must be five characters or fewer.";
+  }
+  if (payload.photoUrl) {
+    try {
+      const url = new URL(payload.photoUrl);
+      if (!["http:", "https:"].includes(url.protocol)) {
+        return "Photo URL must use http or https.";
+      }
+    } catch {
+      return "Enter a valid photo URL.";
+    }
   }
   return validateSchedule(payload.schedule);
 }
@@ -460,7 +471,7 @@ router.get("/stylists", async (_req, res): Promise<void> => {
 });
 
 router.post("/stylists", async (req, res): Promise<void> => {
-  if (!requireSalonManager(req, res)) {
+  if (!(await requireSalonManager(req, res))) {
     return;
   }
 
@@ -484,6 +495,7 @@ router.post("/stylists", async (req, res): Promise<void> => {
       bio: body.data.bio.trim(),
       initials: body.data.initials.trim().toUpperCase(),
       accent: body.data.accent.trim(),
+      photoUrl: body.data.photoUrl?.trim() || null,
       schedule: body.data.schedule,
       active: true,
     })
@@ -558,6 +570,7 @@ router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
       bio: body.data.bio.trim(),
       initials: body.data.initials.trim().toUpperCase(),
       accent: body.data.accent.trim(),
+      photoUrl: body.data.photoUrl?.trim() || null,
       schedule: body.data.schedule,
     })
     .where(and(eq(stylistsTable.id, params.data.stylistId), eq(stylistsTable.active, true)))
@@ -571,7 +584,7 @@ router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
 });
 
 router.delete("/stylists/:stylistId", async (req, res): Promise<void> => {
-  if (!requireSalonManager(req, res)) {
+  if (!(await requireSalonManager(req, res))) {
     return;
   }
 
