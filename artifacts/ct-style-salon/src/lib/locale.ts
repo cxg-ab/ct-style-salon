@@ -30,7 +30,8 @@ type MessageKey =
   | 'tryAgain' | 'errorRequired' | 'errorDuration' | 'errorPrice' | 'serviceSaved'
   | 'serviceAdded' | 'serviceUpdated' | 'serviceSaveError' | 'noManagedServices'
   | 'signInLoading' | 'confirmed' | 'pending' | 'cancelled' | 'collapseDetails' | 'expandDetails'
-  | 'language' | 'heroTitle' | 'locationLine' | 'featuredEmpty';
+  | 'language' | 'heroTitle' | 'locationLine' | 'featuredEmpty'
+  | 'editName' | 'employeeName' | 'saveName' | 'nameSaved' | 'nameRequired' | 'nameError';
 
 const messages: Record<Locale, Record<MessageKey, string>> = {
   en: {
@@ -100,6 +101,9 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     language: 'Language', heroTitle: 'The art of looking well.',
     locationLine: 'My City Centre Masdar · Abu Dhabi',
     featuredEmpty: 'Our service menu is being refreshed. Please check back shortly.',
+    editName: 'Edit name', employeeName: 'Employee name', saveName: 'Save name',
+    nameSaved: 'name is saved.', nameRequired: 'Enter an employee name.',
+    nameError: 'We could not save that employee name.',
   },
   ar: {
     theSalon: 'الصالون', bookVisit: 'احجز زيارة', yourAppointments: 'مواعيدك',
@@ -168,6 +172,9 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     language: 'اللغة', heroTitle: 'فنّ الظهور بأجمل صورة.',
     locationLine: 'ماي سيتي سنتر مصدر · أبوظبي',
     featuredEmpty: 'نحدّث قائمة الخدمات حالياً. يرجى العودة قريباً.',
+    editName: 'تعديل الاسم', employeeName: 'اسم الموظف', saveName: 'حفظ الاسم',
+    nameSaved: 'تم حفظ الاسم.', nameRequired: 'أدخل اسم الموظف.',
+    nameError: 'تعذّر حفظ اسم الموظف.',
   },
 };
 

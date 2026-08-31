@@ -39,6 +39,7 @@ import {
   useListServices,
   useListStylists,
   useUpdateService,
+  useUpdateStylist,
   useUpdateStylistSchedule,
   type Service,
   type ServiceInput,
@@ -357,11 +358,16 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
   const [schedule, setSchedule] = useState<StylistScheduleEntry[]>(stylist.schedule);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string }>();
   const [expanded, setExpanded] = useState(true);
+  const [editingName, setEditingName] = useState(false);
+  const [name, setName] = useState(stylist.name);
+  const updateStylist = useUpdateStylist({
+  });
   const updateSchedule = useUpdateStylistSchedule({
   });
 
   useEffect(() => {
     setSchedule(stylist.schedule);
+    setName(stylist.name);
   }, [stylist.id, stylist.schedule]);
 
   const entryForDay = (dayOfWeek: number) => schedule.find((entry) => entry.dayOfWeek === dayOfWeek);
@@ -397,21 +403,62 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
       },
     );
   };
+  const saveName = (event: React.FormEvent) => {
+    event.preventDefault();
+    const nextName = name.trim();
+    if (!nextName) {
+      setFeedback({ tone: 'error', message: t('nameRequired') });
+      return;
+    }
+    updateStylist.mutate(
+      { stylistId: stylist.id, data: { name: nextName } },
+      {
+        onSuccess: (updatedStylist) => {
+          setName(updatedStylist.name);
+          setEditingName(false);
+          setFeedback({ tone: 'success', message: `${updatedStylist.name} ${t('nameSaved')}` });
+          queryClient.invalidateQueries({ queryKey: getListStylistsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetAvailabilityQueryKey() });
+        },
+        onError: (error) => {
+          const data = error && typeof error === 'object' && 'data' in error
+            ? (error as { data?: unknown }).data
+            : undefined;
+          const message = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+            ? data.error
+            : t('nameError');
+          setFeedback({ tone: 'error', message });
+        },
+      },
+    );
+  };
 
   return (
     <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7" data-testid={`schedule-editor-${stylist.id}`}>
       <div className="flex flex-col justify-between gap-4 border-b border-[hsl(var(--border))] pb-5 sm:flex-row sm:items-start">
          <div className="flex min-w-0 items-center gap-4">
            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-bold" style={{ backgroundColor: `${stylist.accent}25`, color: stylist.accent }}>{stylist.initials}</span>
-           <button type="button" onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} aria-controls={`schedule-details-${stylist.id}`} className="min-w-0 text-left">
+            <button type="button" onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} aria-controls={`schedule-details-${stylist.id}`} className="min-w-0 text-left">
              <span className="flex items-center gap-2"><h2 className="font-display text-3xl">{displayedStylist.name}</h2><ChevronDown size={18} className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} /></span>
              <p className="mt-1 font-mono-ui text-[9px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">{displayedStylist.role}</p>
            </button>
         </div>
-        <button type="button" onClick={save} disabled={updateSchedule.isPending} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid={`button-save-schedule-${stylist.id}`}>
-         {updateSchedule.isPending ? t('saving') : t('saveSchedule')} <Check size={14} />
-        </button>
+         <div className="flex flex-wrap items-center justify-end gap-2">
+           <button type="button" onClick={() => { setEditingName(true); setFeedback(undefined); }} className="inline-flex items-center justify-center rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.08em] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-edit-stylist-name-${stylist.id}`}>{t('editName')}</button>
+           <button type="button" onClick={save} disabled={updateSchedule.isPending} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid={`button-save-schedule-${stylist.id}`}>
+            {updateSchedule.isPending ? t('saving') : t('saveSchedule')} <Check size={14} />
+           </button>
+         </div>
       </div>
+      {editingName && <form onSubmit={saveName} className="mt-5 flex flex-col gap-3 rounded-xl border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--background)/.5)] p-4 sm:flex-row sm:items-end" data-testid={`form-edit-stylist-name-${stylist.id}`}>
+        <label className="flex-1 text-xs font-semibold">{t('employeeName')}
+          <input required autoFocus value={name} onChange={(event) => { setName(event.target.value); setFeedback(undefined); }} className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid={`input-stylist-name-${stylist.id}`} />
+        </label>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => { setName(stylist.name); setEditingName(false); }} className="rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.08em]" data-testid={`button-cancel-stylist-name-${stylist.id}`}>{t('cancel')}</button>
+          <button type="submit" disabled={updateStylist.isPending} className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-4 py-3 text-[11px] font-bold tracking-[.08em] text-[hsl(var(--card))] disabled:opacity-60" data-testid={`button-save-stylist-name-${stylist.id}`}>{updateStylist.isPending ? t('saving') : t('saveName')} <Check size={14} /></button>
+        </div>
+      </form>}
        <div id={`schedule-details-${stylist.id}`} hidden={!expanded} className="mt-5 space-y-2">
         {weekDays.map((day) => {
           const entry = entryForDay(day.value);

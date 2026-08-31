@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
@@ -16,6 +16,9 @@ import {
   UpdateServiceBody,
   UpdateServiceParams,
   UpdateServiceResponse,
+  UpdateStylistBody,
+  UpdateStylistParams,
+  UpdateStylistResponse,
   UpdateStylistScheduleBody,
   UpdateStylistScheduleParams,
   UpdateStylistScheduleResponse,
@@ -29,6 +32,7 @@ import {
 import {
   ensureSalonSeeded,
   getStylistSchedule,
+  renameStylistSchedule,
   setStylistSchedule,
   type StylistScheduleEntry,
 } from "../lib/salon-seed";
@@ -302,6 +306,58 @@ router.get("/stylists", async (_req, res): Promise<void> => {
       rows.map((row) => ({ ...row, schedule: getStylistSchedule(row.name) })),
     ),
   );
+});
+
+router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
+  if (!requireSalonManager(req, res)) {
+    return;
+  }
+
+  await ensureSalonSeeded();
+  const params = UpdateStylistParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Choose a valid employee." });
+    return;
+  }
+  const body = UpdateStylistBody.safeParse(req.body);
+  if (!body.success || !body.data.name.trim()) {
+    res.status(400).json({ error: "Enter a valid employee name." });
+    return;
+  }
+
+  const [stylist] = await db
+    .select()
+    .from(stylistsTable)
+    .where(eq(stylistsTable.id, params.data.stylistId))
+    .limit(1);
+  if (!stylist) {
+    res.status(404).json({ error: "Employee not found." });
+    return;
+  }
+
+  const name = body.data.name.trim();
+  const [duplicate] = await db
+    .select({ id: stylistsTable.id })
+    .from(stylistsTable)
+    .where(and(eq(stylistsTable.name, name), ne(stylistsTable.id, stylist.id)))
+    .limit(1);
+  if (duplicate) {
+    res.status(400).json({ error: "An employee with that name already exists." });
+    return;
+  }
+
+  const [updated] = await db
+    .update(stylistsTable)
+    .set({ name })
+    .where(eq(stylistsTable.id, stylist.id))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "Employee not found." });
+    return;
+  }
+
+  const schedule = renameStylistSchedule(stylist.name, updated.name);
+  res.json(UpdateStylistResponse.parse({ ...updated, schedule }));
 });
 
 router.patch("/stylists/:stylistId/schedule", async (req, res): Promise<void> => {

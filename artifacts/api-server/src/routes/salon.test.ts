@@ -23,6 +23,7 @@ let danielId: number;
 let signatureCutId: number;
 let createdServiceId: number | undefined;
 let originalSchedules = new Map<number, StylistScheduleEntry[]>();
+let originalStylistNames = new Map<number, string>();
 
 type ApiResult<T> = {
   response: Response;
@@ -56,6 +57,17 @@ async function updateSchedule(
     body: JSON.stringify({ schedule }),
   });
   assert.equal(result.response.status, 200);
+}
+
+async function updateStylistName(
+  stylistId: number,
+  name: string,
+): Promise<ApiResult<Record<string, unknown>>> {
+  return request(`/api/stylists/${stylistId}`, {
+    method: "PATCH",
+    headers: managerHeaders,
+    body: JSON.stringify({ name }),
+  });
 }
 
 const servicePayload = {
@@ -106,6 +118,7 @@ before(async () => {
   assert.equal(stylists.response.status, 200);
   for (const stylist of stylists.body) {
     originalSchedules.set(stylist.id, stylist.schedule);
+    originalStylistNames.set(stylist.id, stylist.name);
   }
   marcoId = stylists.body.find((stylist) => stylist.name === "Marco")?.id ?? 0;
   aishaId = stylists.body.find((stylist) => stylist.name === "Aisha")?.id ?? 0;
@@ -119,6 +132,9 @@ before(async () => {
 });
 
 after(async () => {
+  for (const [stylistId, name] of originalStylistNames) {
+    await updateStylistName(stylistId, name);
+  }
   for (const [stylistId, schedule] of originalSchedules) {
     await updateSchedule(stylistId, schedule);
   }
@@ -303,6 +319,27 @@ test("service management rejects malformed prices", async () => {
     update.body.error,
     "Enter a valid price with no more than two decimal places.",
   );
+});
+
+test("manager can rename an employee without losing their schedule", async () => {
+  const originalSchedule = originalSchedules.get(marcoId);
+  assert.ok(originalSchedule);
+
+  const updated = await updateStylistName(marcoId, "Marco Updated");
+  assert.equal(updated.response.status, 200);
+  assert.equal(updated.body.name, "Marco Updated");
+  assert.deepEqual(updated.body.schedule, originalSchedule);
+
+  const listed = await request<Array<{ id: number; name: string; schedule: StylistScheduleEntry[] }>>(
+    "/api/stylists",
+  );
+  assert.equal(listed.response.status, 200);
+  const listedStylist = listed.body.find((stylist) => stylist.id === marcoId);
+  assert.equal(listedStylist?.name, "Marco Updated");
+  assert.deepEqual(listedStylist?.schedule, originalSchedule);
+
+  const blank = await updateStylistName(marcoId, "   ");
+  assert.equal(blank.response.status, 400);
 });
 
 test("different employees return different slots for the same date", async () => {
