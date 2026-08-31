@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
+import { shadcn } from '@clerk/themes';
 import {
   ArrowRight,
   CalendarDays,
@@ -48,6 +51,65 @@ import { bookingSteps, selectEmployee } from '@/lib/booking-flow';
 import { Route, Switch, Link, Router as WouterRouter, useLocation } from 'wouter';
 
 const queryClient = new QueryClient();
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+
+if (!clerkPubKey) {
+  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
+}
+
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: 'clerk',
+  options: {
+    logoPlacement: 'inside' as const,
+    logoLinkUrl: basePath || '/',
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+  },
+  variables: {
+    colorPrimary: 'hsl(20 55% 45%)',
+    colorForeground: 'hsl(26 14% 17%)',
+    colorMutedForeground: 'hsl(27 11% 42%)',
+    colorDanger: 'hsl(5 58% 43%)',
+    colorBackground: 'hsl(36 35% 97%)',
+    colorInput: 'hsl(36 35% 97%)',
+    colorInputForeground: 'hsl(26 14% 17%)',
+    colorNeutral: 'hsl(30 13% 79%)',
+    fontFamily: 'DM Sans, sans-serif',
+    borderRadius: '0.85rem',
+  },
+  elements: {
+    rootBox: 'w-full flex justify-center',
+    cardBox: 'bg-[hsl(36_35%_97%)] rounded-2xl w-[440px] max-w-full overflow-hidden',
+    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    headerTitle: 'font-display text-3xl text-[hsl(26_14%_17%)]',
+    headerSubtitle: 'text-[hsl(27_11%_42%)]',
+    socialButtonsBlockButtonText: 'text-[hsl(26_14%_17%)]',
+    formFieldLabel: 'text-[hsl(26_14%_17%)]',
+    footerActionLink: 'text-[hsl(20_55%_45%)]',
+    footerActionText: 'text-[hsl(27_11%_42%)]',
+    dividerText: 'text-[hsl(27_11%_42%)]',
+    identityPreviewEditButton: 'text-[hsl(20_55%_45%)]',
+    formFieldSuccessText: 'text-[hsl(20_55%_45%)]',
+    alertText: 'text-[hsl(5_58%_43%)]',
+    logoBox: 'h-12 w-12',
+    logoImage: 'h-12 w-12 rounded-full',
+    socialButtonsBlockButton: 'border-[hsl(30_13%_79%)]',
+    formButtonPrimary: 'bg-[hsl(20_55%_45%)] hover:bg-[hsl(16_61%_48%)]',
+    formFieldInput: 'border-[hsl(30_14%_73%)] bg-[hsl(36_35%_97%)]',
+    footerAction: 'border-0',
+    dividerLine: 'bg-[hsl(30_13%_79%)]',
+    alert: 'border-[hsl(5_58%_43%/.26)] bg-[hsl(5_58%_43%/.06)]',
+    otpCodeFieldInput: 'border-[hsl(30_14%_73%)]',
+    formFieldRow: 'gap-2',
+    main: 'px-2',
+  },
+};
 
 function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -157,9 +219,9 @@ function Home() {
     <main>
       <section className="relative overflow-hidden bg-[hsl(var(--secondary))] text-[hsl(var(--card))]">
         <div className="absolute inset-0 opacity-40">
-          <img src={storefrontImage} alt="CT Style Salon storefront" className="h-full w-full object-cover object-center opacity-55 mix-blend-luminosity" />
+           <img src={storefrontImage} alt="CT Style Salon storefront" className="h-full w-full object-cover object-center opacity-75" />
         </div>
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,hsl(var(--secondary))_0%,hsl(var(--secondary)/.88)_38%,hsl(var(--secondary)/.38)_100%)]" />
+         <div className="absolute inset-0 bg-[linear-gradient(90deg,hsl(var(--secondary)/.94)_0%,hsl(var(--secondary)/.72)_35%,hsl(var(--secondary)/.2)_100%)]" />
         <div className="relative mx-auto flex min-h-[570px] max-w-[1240px] items-end px-5 pb-14 pt-20 sm:px-8 md:min-h-[640px] md:pb-20">
           <div className="max-w-[650px] reveal">
             <p className="mb-7 flex items-center gap-3 font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--accent))]"><span className="h-px w-8 bg-[hsl(var(--accent))]" /> My City Centre Masdar · Abu Dhabi</p>
@@ -275,7 +337,6 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
   const [schedule, setSchedule] = useState<StylistScheduleEntry[]>(stylist.schedule);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string }>();
   const updateSchedule = useUpdateStylistSchedule({
-    request: { headers: { 'x-salon-manager': 'true' } },
   });
 
   useEffect(() => {
@@ -397,10 +458,8 @@ function ServiceEditor({
   const [form, setForm] = useState<ServiceFormState>(() => service ? serviceToForm(service) : emptyServiceForm);
   const [feedback, setFeedback] = useState<string>();
   const createService = useCreateService({
-    request: { headers: { 'x-salon-manager': 'true' } },
   });
   const updateService = useUpdateService({
-    request: { headers: { 'x-salon-manager': 'true' } },
   });
   const isPending = createService.isPending || updateService.isPending;
 
@@ -545,12 +604,18 @@ function ServiceManagement() {
 function ManagerSchedule() {
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
   const stylists = stylistsQuery.data ?? [];
+  const { signOut } = useClerk();
   return (
     <main className="mx-auto max-w-[1000px] px-5 py-14 sm:px-8 md:py-24">
-      <div className="max-w-2xl reveal">
-        <p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">Manager workspace</p>
-        <h1 className="mt-4 font-display text-6xl leading-[.84] sm:text-8xl">Keep the<br /><i>chairs ready.</i></h1>
-        <p className="mt-7 max-w-xl text-base leading-7 text-[hsl(var(--muted-foreground))]">Keep the service menu current and update each employee’s working days and open hours. Changes are used by booking as soon as you save.</p>
+      <div className="flex flex-col justify-between gap-8 sm:flex-row sm:items-start">
+        <div className="max-w-2xl reveal">
+          <p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">Manager workspace</p>
+          <h1 className="mt-4 font-display text-6xl leading-[.84] sm:text-8xl">Keep the<br /><i>chairs ready.</i></h1>
+          <p className="mt-7 max-w-xl text-base leading-7 text-[hsl(var(--muted-foreground))]">Keep the service menu current and update each employee’s working days and open hours. Changes are used by booking as soon as you save.</p>
+        </div>
+        <button type="button" onClick={() => signOut({ redirectUrl: basePath || '/' })} className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid="button-manager-sign-out">
+          Sign out
+        </button>
       </div>
       <ServiceManagement />
       <div className="mt-12 space-y-5">
@@ -634,13 +699,95 @@ function Appointments() {
   return <main className="mx-auto max-w-[1000px] px-5 py-14 sm:px-8 md:py-24"><div className="max-w-2xl reveal"><p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">Your visits</p><h1 className="mt-4 font-display text-6xl leading-[.84] sm:text-8xl">Keep the<br /><i>good times.</i></h1><p className="mt-7 max-w-md text-base leading-7 text-[hsl(var(--muted-foreground))]">Enter the email you used when booking and we will bring up your salon notes.</p></div><form onSubmit={(event) => { event.preventDefault(); setSubmittedEmail(email.trim()); }} className="mt-12 flex max-w-xl flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Mail size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[hsl(var(--primary))]" /><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" className="h-14 w-full rounded-full border border-[hsl(var(--input))] bg-[hsl(var(--card))] pl-11 pr-5 text-sm" data-testid="input-lookup-email" /></div><button type="submit" className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-7 text-xs font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))]" data-testid="button-lookup-appointments"><Search size={15} /> Find my visits</button></form>{submittedEmail && <section className="mt-16 reveal"><div className="mb-6 flex items-center justify-between"><h2 className="font-display text-4xl">Your appointments</h2><span className="font-mono-ui text-[10px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{submittedEmail}</span></div>{appointmentsQuery.isLoading ? <div className="space-y-3"><div className="skeleton h-28 rounded-2xl" /><div className="skeleton h-28 rounded-2xl" /></div> : appointmentsQuery.isError ? <ErrorMessage retry={() => appointmentsQuery.refetch()} /> : appointments.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-12 text-center" data-testid="empty-appointments"><CalendarDays className="mx-auto text-[hsl(var(--primary))]" size={25} /><p className="mt-4 font-display text-2xl">Nothing booked yet.</p><p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">When you are ready, we will be here.</p><Link href="/book" className="mt-5 inline-flex items-center gap-2 text-xs font-bold text-[hsl(var(--primary))]" data-testid="link-empty-book">Book a visit <ArrowRight size={14} /></Link></div> : <div className="space-y-3">{appointments.map((appointment) => <div key={appointment.id} className="flex flex-col justify-between gap-5 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:flex-row sm:items-center sm:p-6" data-testid={`card-appointment-${appointment.id}`}><div className="flex items-start gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[hsl(var(--muted))] text-[hsl(var(--primary))]"><Scissors size={18} /></div><div><div className="flex flex-wrap items-center gap-3"><h3 className="font-display text-2xl">{appointment.serviceName}</h3><span className="rounded-full bg-[hsl(var(--accent)/.35)] px-2 py-1 font-mono-ui text-[9px] uppercase tracking-[.08em]">{appointment.status}</span></div><p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{appointment.stylistName}</p></div></div><div className="flex items-center gap-5 border-t border-[hsl(var(--border)/.7)] pt-4 text-sm sm:border-t-0 sm:pt-0"><span className="flex items-center gap-2"><CalendarDays size={15} className="text-[hsl(var(--primary))]" />{new Date(`${appointment.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span><span className="flex items-center gap-2"><Clock3 size={15} className="text-[hsl(var(--primary))]" />{appointment.time}</span></div></div>)}</div>}</section>}</main>;
 }
 
+function SignInPage() {
+  return (
+    <main className="flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-4 py-10">
+      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+    </main>
+  );
+}
+
+function SignUpPage() {
+  return (
+    <main className="flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-4 py-10">
+      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+    </main>
+  );
+}
+
+function ManagerRoute() {
+  const { isLoaded, isSignedIn } = useAuth();
+
+  if (!isLoaded) {
+    return <main className="mx-auto flex min-h-[calc(100dvh-76px)] max-w-[1000px] items-center px-5 py-14 sm:px-8" data-testid="manager-auth-loading"><div className="w-full"><div className="skeleton h-10 w-48 rounded-xl" /><div className="skeleton mt-4 h-28 w-full max-w-2xl rounded-2xl" /></div></main>;
+  }
+
+  if (!isSignedIn) {
+    return (
+      <main className="mx-auto flex min-h-[calc(100dvh-76px)] max-w-[760px] items-center px-5 py-16 sm:px-8">
+        <div className="w-full rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 sm:p-12" data-testid="manager-sign-in-prompt">
+          <p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">Manager workspace</p>
+          <h1 className="mt-4 font-display text-5xl leading-[.88] sm:text-7xl">Sign in to<br /><i>keep chairs ready.</i></h1>
+          <p className="mt-6 max-w-md text-base leading-7 text-[hsl(var(--muted-foreground))]">This workspace is reserved for the salon team. Sign in with your manager account to update services and employee schedules.</p>
+          <Link href="/sign-in" className="mt-8 inline-flex items-center gap-2 rounded-full bg-[hsl(var(--primary))] px-6 py-4 text-xs font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))]" data-testid="link-manager-sign-in">Sign in <ArrowRight size={15} /></Link>
+        </div>
+      </main>
+    );
+  }
+
+  return <ManagerSchedule />;
+}
+
 function Router() {
   const [location] = useLocation();
-  return <ErrorBoundary resetKey={location}><Switch><Route path="/" component={Home} /><Route path="/book" component={Book} /><Route path="/appointments" component={Appointments} /><Route path="/manage" component={ManagerSchedule} /><Route component={NotFound} /></Switch></ErrorBoundary>;
+  return <ErrorBoundary resetKey={location}><Switch><Route path="/" component={Home} /><Route path="/book" component={Book} /><Route path="/appointments" component={Appointments} /><Route path="/manage" component={ManagerRoute} /><Route component={NotFound} /></Switch></ErrorBoundary>;
+}
+
+function ClerkQueryClientCacheInvalidator() {
+  const { isSignedIn } = useAuth();
+  const previousAuthState = useRef<boolean | undefined>(undefined);
+
+  useEffect(() => {
+    if (previousAuthState.current !== undefined && previousAuthState.current !== isSignedIn) {
+      queryClient.clear();
+    }
+    previousAuthState.current = isSignedIn;
+  }, [isSignedIn]);
+
+  return null;
+}
+
+function stripBase(path: string) {
+  return basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
+}
+
+function ClerkApp() {
+  const [, setLocation] = useLocation();
+
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      appearance={clerkAppearance}
+      signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-up`}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    >
+      <QueryClientProvider client={queryClient}>
+        <ClerkQueryClientCacheInvalidator />
+        <Switch>
+          <Route path="/sign-in/*?" component={SignInPage} />
+          <Route path="/sign-up/*?" component={SignUpPage} />
+          <Route component={() => <Shell><Router /></Shell>} />
+        </Switch>
+      </QueryClientProvider>
+    </ClerkProvider>
+  );
 }
 
 function App() {
-  return <QueryClientProvider client={queryClient}><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Shell><Router /></Shell></WouterRouter></QueryClientProvider>;
+  return <WouterRouter base={basePath}><ClerkApp /></WouterRouter>;
 }
 
 export default App;

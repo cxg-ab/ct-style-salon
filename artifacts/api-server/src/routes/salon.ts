@@ -1,4 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
+import { getAuth } from "@clerk/express";
 import { Router, type IRouter, type Request } from "express";
 import {
   CreateAppointmentBody,
@@ -112,8 +113,26 @@ function validateSchedule(schedule: StylistScheduleEntry[]): string | undefined 
   return undefined;
 }
 
-function isSalonManager(req: Request): boolean {
-  return req.header("x-salon-manager") === "true";
+type AuthenticatedRequest = Request & {
+  salonManagerId?: string;
+};
+
+function requireSalonManager(req: AuthenticatedRequest, res: Parameters<IRouter["post"]>[1]): boolean {
+  const auth = getAuth(req);
+  const userId = auth?.userId ?? auth?.sessionClaims?.userId;
+  const testManager =
+    process.env.NODE_ENV === "test" && req.header("x-salon-manager") === "true"
+      ? "test-manager"
+      : undefined;
+
+  if (!userId && !testManager) {
+    res.status(401).json({ error: "Sign in as a salon manager to make changes." });
+    return false;
+  }
+
+  req.salonManagerId = userId ?? testManager;
+  req.log?.info({ managerId: req.salonManagerId }, "Salon manager mutation authorized");
+  return true;
 }
 
 function appointmentTimesOverlap(
@@ -204,8 +223,7 @@ function serviceResponse(row: typeof servicesTable.$inferSelect) {
 }
 
 router.post("/services", async (req, res): Promise<void> => {
-  if (!isSalonManager(req)) {
-    res.status(403).json({ error: "Manager access is required to update services." });
+  if (!requireSalonManager(req, res)) {
     return;
   }
 
@@ -236,8 +254,7 @@ router.post("/services", async (req, res): Promise<void> => {
 });
 
 router.patch("/services/:serviceId", async (req, res): Promise<void> => {
-  if (!isSalonManager(req)) {
-    res.status(403).json({ error: "Manager access is required to update services." });
+  if (!requireSalonManager(req, res)) {
     return;
   }
 
@@ -288,8 +305,7 @@ router.get("/stylists", async (_req, res): Promise<void> => {
 });
 
 router.patch("/stylists/:stylistId/schedule", async (req, res): Promise<void> => {
-  if (!isSalonManager(req)) {
-    res.status(403).json({ error: "Manager access is required to update employee schedules." });
+  if (!requireSalonManager(req, res)) {
     return;
   }
 
