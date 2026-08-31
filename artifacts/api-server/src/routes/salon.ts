@@ -81,7 +81,14 @@ function slotsForSchedule(
     const open = scheduleTimeToMinutes(entry.openTime);
     const close = scheduleTimeToMinutes(entry.closeTime);
     for (let start = open; start + durationMinutes <= close; start += 90) {
-      slots.add(formatSlotTime(start));
+      const overlapsBreak = (entry.breaks ?? []).some((breakTime) => {
+        const breakStart = scheduleTimeToMinutes(breakTime.startTime);
+        const breakEnd = scheduleTimeToMinutes(breakTime.endTime);
+        return start < breakEnd && breakStart < start + durationMinutes;
+      });
+      if (!overlapsBreak) {
+        slots.add(formatSlotTime(start));
+      }
     }
   }
   return [...slots].sort((left, right) => {
@@ -98,6 +105,29 @@ function validateSchedule(schedule: StylistScheduleEntry[]): string | undefined 
     const close = scheduleTimeToMinutes(entry.closeTime);
     if (!Number.isFinite(open) || !Number.isFinite(close) || open >= close) {
       return "Each opening time must be earlier than its closing time.";
+    }
+    const breaks = entry.breaks ?? [];
+    for (const breakTime of breaks) {
+      const breakStart = scheduleTimeToMinutes(breakTime.startTime);
+      const breakEnd = scheduleTimeToMinutes(breakTime.endTime);
+      if (!Number.isFinite(breakStart) || !Number.isFinite(breakEnd) || breakStart >= breakEnd) {
+        return "Each break must start before it ends.";
+      }
+      if (breakStart < open || breakEnd > close) {
+        return "Breaks must fall within working hours.";
+      }
+    }
+    for (let breakIndex = 0; breakIndex < breaks.length; breakIndex += 1) {
+      for (let otherBreakIndex = breakIndex + 1; otherBreakIndex < breaks.length; otherBreakIndex += 1) {
+        const breakTime = breaks[breakIndex];
+        const otherBreak = breaks[otherBreakIndex];
+        if (
+          scheduleTimeToMinutes(breakTime.startTime) < scheduleTimeToMinutes(otherBreak.endTime) &&
+          scheduleTimeToMinutes(otherBreak.startTime) < scheduleTimeToMinutes(breakTime.endTime)
+        ) {
+          return "Breaks cannot overlap on the same day.";
+        }
+      }
     }
   }
 
@@ -296,6 +326,42 @@ router.patch("/services/:serviceId", async (req, res): Promise<void> => {
   }
 
   res.json(UpdateServiceResponse.parse(serviceResponse(updated)));
+});
+
+router.delete("/services/:serviceId", async (req, res): Promise<void> => {
+  if (!requireSalonManager(req, res)) {
+    return;
+  }
+
+  await ensureSalonSeeded();
+  const params = UpdateServiceParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Choose a valid service." });
+    return;
+  }
+
+  const [service] = await db
+    .select({ id: servicesTable.id })
+    .from(servicesTable)
+    .where(eq(servicesTable.id, params.data.serviceId))
+    .limit(1);
+  if (!service) {
+    res.status(404).json({ error: "Service not found." });
+    return;
+  }
+
+  const [appointment] = await db
+    .select({ id: appointmentsTable.id })
+    .from(appointmentsTable)
+    .where(eq(appointmentsTable.serviceId, service.id))
+    .limit(1);
+  if (appointment) {
+    res.status(409).json({ error: "This service cannot be deleted because it has existing appointments." });
+    return;
+  }
+
+  await db.delete(servicesTable).where(eq(servicesTable.id, service.id));
+  res.status(204).send();
 });
 
 router.get("/stylists", async (_req, res): Promise<void> => {

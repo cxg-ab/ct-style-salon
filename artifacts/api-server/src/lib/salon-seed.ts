@@ -63,7 +63,20 @@ export type StylistScheduleEntry = {
   dayOfWeek: number;
   openTime: string;
   closeTime: string;
+  breaks?: StylistBreak[];
 };
+
+export type StylistBreak = {
+  startTime: string;
+  endTime: string;
+};
+
+function copySchedule(schedule: StylistScheduleEntry[]): StylistScheduleEntry[] {
+  return schedule.map((entry) => ({
+    ...entry,
+    breaks: (entry.breaks ?? []).map((breakTime) => ({ ...breakTime })),
+  }));
+}
 
 const defaultStylistSchedules: Record<string, StylistScheduleEntry[]> = {
   Marco: [
@@ -99,16 +112,16 @@ const stylistSchedules = new Map(
 );
 
 export function getStylistSchedule(name: string): StylistScheduleEntry[] {
-  return (stylistSchedules.get(name) ?? []).map((entry) => ({ ...entry }));
+  return copySchedule(stylistSchedules.get(name) ?? []);
 }
 
 export function setStylistSchedule(
   name: string,
   schedule: StylistScheduleEntry[],
 ): StylistScheduleEntry[] {
-  const savedSchedule = schedule.map((entry) => ({ ...entry }));
+  const savedSchedule = copySchedule(schedule);
   stylistSchedules.set(name, savedSchedule);
-  return savedSchedule.map((entry) => ({ ...entry }));
+  return copySchedule(savedSchedule);
 }
 
 export function renameStylistSchedule(
@@ -118,7 +131,7 @@ export function renameStylistSchedule(
   const schedule = stylistSchedules.get(previousName) ?? [];
   stylistSchedules.delete(previousName);
   stylistSchedules.set(nextName, schedule);
-  return schedule.map((entry) => ({ ...entry }));
+  return copySchedule(schedule);
 }
 
 export async function ensureSalonSeeded(): Promise<void> {

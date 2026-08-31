@@ -115,6 +115,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteService
+      tags: [salon]
+      summary: Delete a salon service
+      security:
+        - SalonManager: []
+      parameters:
+        - name: serviceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Service deleted
+        "400":
+          description: Invalid service identifier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Manager access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Service not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Service has existing appointments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /stylists:
     get:
       operationId: listStylists
@@ -447,10 +486,27 @@ components:
         closeTime:
           type: string
           pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        breaks:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/StylistBreak"
       required:
         - dayOfWeek
         - openTime
         - closeTime
+    StylistBreak:
+      type: object
+      properties:
+        startTime:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        endTime:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+      required:
+        - startTime
+        - endTime
     StylistScheduleUpdate:
       type: object
       properties:
