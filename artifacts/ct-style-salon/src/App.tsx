@@ -104,13 +104,13 @@ function Shell({ children }: { children: React.ReactNode }) {
           </div>
           <div>
             <p className="font-mono-ui text-[10px] uppercase tracking-[.22em] text-[hsl(var(--accent))]">Find us</p>
-            <p className="mt-4 text-sm leading-6 text-[hsl(var(--card)/.76)]">The Grand Arcade<br />Central district</p>
-            <p className="mt-3 flex items-center gap-2 text-sm text-[hsl(var(--card)/.76)]"><Phone size={13} /> Contact the studio</p>
+            <p className="mt-4 text-sm leading-6 text-[hsl(var(--card)/.76)]">My City Centre Masdar<br />Khalifa City, Abu Dhabi</p>
+            <a href="tel:+97125520422" className="mt-3 flex items-center gap-2 text-sm text-[hsl(var(--card)/.76)] hover:text-[hsl(var(--accent))]"><Phone size={13} /> +971 2 552 0422</a>
           </div>
           <div>
             <p className="font-mono-ui text-[10px] uppercase tracking-[.22em] text-[hsl(var(--accent))]">Stay in touch</p>
-            <p className="mt-4 text-sm text-[hsl(var(--card)/.76)]">Tue–Sat · 9:00–19:00</p>
-            <a href="https://instagram.com" className="mt-3 inline-flex items-center gap-2 text-sm text-[hsl(var(--card)/.76)] hover:text-[hsl(var(--accent))]" data-testid="link-instagram"><Instagram size={14} /> @ctstylesalon</a>
+            <p className="mt-4 text-sm text-[hsl(var(--card)/.76)]">Daily · 11:00–22:00</p>
+            <a href="https://instagram.com/ct_style_salon" className="mt-3 inline-flex items-center gap-2 text-sm text-[hsl(var(--card)/.76)] hover:text-[hsl(var(--accent))]" data-testid="link-instagram"><Instagram size={14} /> @ct_style_salon</a>
           </div>
         </div>
         <div className="mx-auto flex max-w-[1240px] justify-between border-t border-[hsl(var(--card)/.12)] px-5 py-5 font-mono-ui text-[9px] tracking-[.16em] text-[hsl(var(--card)/.4)] sm:px-8">
@@ -153,7 +153,7 @@ function Home() {
         <div className="absolute inset-0 bg-[linear-gradient(90deg,hsl(var(--secondary))_0%,hsl(var(--secondary)/.88)_38%,hsl(var(--secondary)/.38)_100%)]" />
         <div className="relative mx-auto flex min-h-[570px] max-w-[1240px] items-end px-5 pb-14 pt-20 sm:px-8 md:min-h-[640px] md:pb-20">
           <div className="max-w-[650px] reveal">
-            <p className="mb-7 flex items-center gap-3 font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--accent))]"><span className="h-px w-8 bg-[hsl(var(--accent))]" /> The Grand Arcade · Est. 2014</p>
+            <p className="mb-7 flex items-center gap-3 font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--accent))]"><span className="h-px w-8 bg-[hsl(var(--accent))]" /> My City Centre Masdar · Abu Dhabi</p>
             <h1 className="font-display text-[clamp(4.5rem,11vw,9rem)] leading-[.78] tracking-[-.045em] text-balance">The art<br /><i>of</i> looking well.</h1>
             <p className="mt-9 max-w-md text-base leading-7 text-[hsl(var(--card)/.74)] sm:text-lg">Modern grooming in a space made for slowing down. Come as you are. Leave a little sharper.</p>
             <div className="mt-10 flex flex-wrap items-center gap-4">
@@ -175,11 +175,11 @@ function Home() {
           </div>
           <div className="flex items-center gap-4 border-b border-[hsl(var(--border)/.7)] pb-5 sm:border-b-0 sm:border-r sm:pb-0 sm:pl-6">
             <MapPin size={21} className="text-[hsl(var(--primary))]" />
-            <div><strong className="block text-sm">{summary?.neighborhood ?? 'Central district'}</strong><span className="font-mono-ui text-[9px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">Inside The Grand Arcade</span></div>
+            <div><strong className="block text-sm">{summary?.neighborhood ?? 'My City Centre Masdar'}</strong><span className="font-mono-ui text-[9px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">Khalifa City · Abu Dhabi</span></div>
           </div>
           <div className="flex items-center gap-4 sm:pl-6">
             <Clock3 size={21} className="text-[hsl(var(--primary))]" />
-            <div><strong className="block text-sm">{summary?.hours ?? 'Tue–Sat · 9:00–19:00'}</strong><span className="font-mono-ui text-[9px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">Walk-ins welcome when available</span></div>
+            <div><strong className="block text-sm">{summary?.hours ?? 'Daily · 11 AM – 10 PM'}</strong><span className="font-mono-ui text-[9px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">Sunday open until 11 PM</span></div>
           </div>
         </div>
       </section>

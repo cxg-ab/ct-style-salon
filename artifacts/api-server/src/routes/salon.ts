@@ -194,10 +194,10 @@ router.get("/salon-summary", (_req, res): void => {
   res.json(
     GetSalonSummaryResponse.parse({
       rating: 4.9,
-      reviewCount: 128,
+      reviewCount: 212,
       nextAvailable: "Today at 4:00 PM",
-      neighborhood: "The Galleria · Level 2",
-      hours: "Daily · 10 AM – 10 PM",
+      neighborhood: "My City Centre Masdar",
+      hours: "Mon–Thu 11–10 · Fri–Sat 11–10:30",
     }),
   );
 });
