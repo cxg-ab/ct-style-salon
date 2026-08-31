@@ -1,6 +1,6 @@
-# [Project name]
+# CT Style Salon
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+CT Style Salon is a polished salon booking experience for discovering services, choosing a stylist, and reserving a visit.
 
 ## Run & Operate
 
@@ -22,15 +22,25 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/ct-style-salon/src/App.tsx` — client routes and booking UI
+- `artifacts/ct-style-salon/src/index.css` — shared salon visual language and responsive styles
+- `lib/api-spec/openapi.yaml` — source of truth for salon API contracts
+- `artifacts/api-server/src/routes/salon.ts` — salon service, availability, and appointment endpoints
+- `lib/db/src/schema/salon.ts` — salon services, stylists, and appointments schema
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Booking is guest-first and uses email lookup instead of requiring account creation.
+- The storefront reference image is used as the salon's hero visual, with an editorial terracotta, olive, and cream palette.
+- Calendar-only appointment dates remain date strings in PostgreSQL to avoid timezone shifts.
+- Availability is computed from a fixed daily slot schedule and existing appointments.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Visitors can browse the salon and featured services.
+- Guests can book a service with a stylist, date, time, and contact details.
+- Guests can look up confirmed visits by the email used when booking.
+- The salon summary includes rating, location, hours, and next availability.
 
 ## User preferences
 
@@ -38,7 +48,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Regenerate API hooks and Zod schemas after changing `lib/api-spec/openapi.yaml`.
+- The web artifact requires workflow-provided `PORT` and `BASE_PATH`; use its managed workflow for previews.
 
 ## Pointers
 
