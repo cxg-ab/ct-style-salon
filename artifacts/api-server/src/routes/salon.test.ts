@@ -222,12 +222,12 @@ test("service management rejects unauthenticated requests", async () => {
     method: "POST",
     body: JSON.stringify(servicePayload),
   });
-  assert.equal(create.response.status, 403);
-  assert.equal(create.body.error, "Manager access is required to update services.");
+  assert.equal(create.response.status, 401);
+  assert.equal(create.body.error, "Sign in as a salon manager to make changes.");
 
   const update = await updateService(createdServiceId ?? 999999, servicePayload, {});
-  assert.equal(update.response.status, 403);
-  assert.equal(update.body.error, "Manager access is required to update services.");
+  assert.equal(update.response.status, 401);
+  assert.equal(update.body.error, "Sign in as a salon manager to make changes.");
 });
 
 test("service management rejects incomplete requests", async () => {

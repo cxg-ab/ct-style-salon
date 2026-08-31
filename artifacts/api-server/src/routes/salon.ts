@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { getAuth } from "@clerk/express";
-import { Router, type IRouter, type Request } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import {
   CreateAppointmentBody,
   CreateAppointmentResponse,
@@ -117,9 +117,9 @@ type AuthenticatedRequest = Request & {
   salonManagerId?: string;
 };
 
-function requireSalonManager(req: AuthenticatedRequest, res: Parameters<IRouter["post"]>[1]): boolean {
+function requireSalonManager(req: AuthenticatedRequest, res: Response): boolean {
   const auth = getAuth(req);
-  const userId = auth?.userId ?? auth?.sessionClaims?.userId;
+  const userId = auth?.userId;
   const testManager =
     process.env.NODE_ENV === "test" && req.header("x-salon-manager") === "true"
       ? "test-manager"
