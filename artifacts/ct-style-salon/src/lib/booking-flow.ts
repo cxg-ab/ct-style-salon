@@ -2,7 +2,7 @@ export const bookingSteps = ['Employee', 'Service', 'Date & time', 'Details'] as
 
 export type BookingSelection = {
   stylistId?: number;
-  serviceId?: number;
+  serviceIds: number[];
   time: string;
   step: number;
 };
@@ -10,7 +10,7 @@ export type BookingSelection = {
 export function selectEmployee(stylistId: number): BookingSelection {
   return {
     stylistId,
-    serviceId: undefined,
+    serviceIds: [],
     time: '',
     step: 2,
   };

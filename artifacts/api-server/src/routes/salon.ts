@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { clerkClient, getAuth } from "@clerk/express";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
@@ -213,15 +213,44 @@ function toDate(value: unknown): Date | undefined {
 
 function appointmentResponse(
   row: typeof appointmentsTable.$inferSelect,
-  serviceName: string,
+  serviceRows: Array<typeof servicesTable.$inferSelect>,
   stylistName: string,
 ) {
+  const serviceIds = row.serviceIds.length > 0 ? row.serviceIds : [row.serviceId];
+  const servicesById = new Map(serviceRows.map((service) => [service.id, service]));
+  const selectedServices = serviceIds
+    .map((serviceId) => servicesById.get(serviceId))
+    .filter((service): service is typeof servicesTable.$inferSelect => Boolean(service));
+  const serviceNames = selectedServices.map((service) => service.name);
+  const calculatedDuration = selectedServices.reduce(
+    (total, service) => total + service.durationMinutes,
+    0,
+  );
+  const calculatedPrice = selectedServices.reduce(
+    (total, service) => total + Number(service.price),
+    0,
+  );
+
   return {
     ...row,
-    serviceName,
+    serviceId: serviceIds[0],
+    serviceIds,
+    serviceName: serviceNames.join(", "),
+    serviceNames,
+    totalDurationMinutes: row.totalDurationMinutes ?? calculatedDuration,
+    totalPrice: Number(row.totalPrice ?? calculatedPrice),
     stylistName,
     date: new Date(`${row.date}T00:00:00.000Z`),
   };
+}
+
+function parseServiceIds(value: unknown): number[] {
+  const values = Array.isArray(value)
+    ? value.flatMap((item) => String(item).split(","))
+    : value === undefined || value === null
+      ? []
+      : String(value).split(",");
+  return [...new Set(values.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
 }
 
 function stylistResponse(row: typeof stylistsTable.$inferSelect) {
@@ -401,7 +430,12 @@ router.delete("/services/:serviceId", async (req, res): Promise<void> => {
     const [appointment] = await tx
       .select({ id: appointmentsTable.id })
       .from(appointmentsTable)
-      .where(eq(appointmentsTable.serviceId, service.id))
+      .where(
+        or(
+          eq(appointmentsTable.serviceId, service.id),
+          sql`${appointmentsTable.serviceIds} @> ARRAY[${service.id}]::integer[]`,
+        ),
+      )
       .limit(1);
     if (appointment) {
       res.status(409).json({ error: "This service cannot be deleted because it has existing appointments." });
@@ -606,7 +640,7 @@ router.get("/availability", async (req, res): Promise<void> => {
   const parsed = GetAvailabilityQueryParams.safeParse({
     date: toDate(req.query.date),
     stylistId: Number(req.query.stylistId),
-    serviceId: Number(req.query.serviceId),
+    serviceIds: parseServiceIds(req.query.serviceIds ?? req.query.serviceId),
   });
   if (!parsed.success) {
     res.status(400).json({ error: "Choose a valid appointment date." });
@@ -631,21 +665,24 @@ router.get("/availability", async (req, res): Promise<void> => {
   }
 
   const serviceRows = await db
-    .select({ durationMinutes: servicesTable.durationMinutes })
+    .select()
     .from(servicesTable)
-    .where(eq(servicesTable.id, parsed.data.serviceId))
-    .limit(1);
-  const service = serviceRows[0];
-  if (!service) {
-    res.status(400).json({ error: "Choose a valid service." });
+    .where(inArray(servicesTable.id, parsed.data.serviceIds));
+  if (serviceRows.length !== parsed.data.serviceIds.length) {
+    res.status(400).json({ error: "Choose valid services." });
     return;
   }
+  const durationMinutes = serviceRows.reduce(
+    (total, service) => total + service.durationMinutes,
+    0,
+  );
 
   const booked = await db
     .select({
       stylistId: appointmentsTable.stylistId,
       time: appointmentsTable.time,
-      durationMinutes: servicesTable.durationMinutes,
+      durationMinutes: appointmentsTable.totalDurationMinutes,
+      legacyDurationMinutes: servicesTable.durationMinutes,
     })
     .from(appointmentsTable)
     .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
@@ -655,7 +692,7 @@ router.get("/availability", async (req, res): Promise<void> => {
     const appointments = bookedByStylist.get(appointment.stylistId) ?? [];
     appointments.push({
       time: appointment.time,
-      durationMinutes: appointment.durationMinutes,
+      durationMinutes: appointment.durationMinutes ?? appointment.legacyDurationMinutes,
     });
     bookedByStylist.set(appointment.stylistId, appointments);
   }
@@ -666,14 +703,14 @@ router.get("/availability", async (req, res): Promise<void> => {
     stylistId: stylist.id,
     date: parsed.data.date,
     slots: schedule.length > 0
-      ? slotsForSchedule(schedule, weekday, service.durationMinutes).filter(
+      ? slotsForSchedule(schedule, weekday, durationMinutes).filter(
           (slot) =>
             !bookedByStylist
               .get(stylist.id)
               ?.some((bookedAppointment) =>
                 appointmentTimesOverlap(
                   slot,
-                  service.durationMinutes,
+                  durationMinutes,
                   bookedAppointment,
                 ),
               ),
@@ -694,19 +731,27 @@ router.get("/appointments", async (req, res): Promise<void> => {
   const rows = await db
     .select({
       appointment: appointmentsTable,
-      serviceName: servicesTable.name,
       stylistName: stylistsTable.name,
     })
     .from(appointmentsTable)
-    .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
     .innerJoin(stylistsTable, eq(appointmentsTable.stylistId, stylistsTable.id))
     .where(eq(appointmentsTable.email, parsed.data.email.toLowerCase()))
     .orderBy(desc(appointmentsTable.date), desc(appointmentsTable.time));
 
   res.json(
     ListAppointmentsResponse.parse(
-      rows.map(({ appointment, serviceName, stylistName }) =>
-        appointmentResponse(appointment, serviceName, stylistName),
+      await Promise.all(
+        rows.map(async ({ appointment, stylistName }) => {
+          const serviceIds =
+            appointment.serviceIds.length > 0
+              ? appointment.serviceIds
+              : [appointment.serviceId];
+          const serviceRows = await db
+            .select()
+            .from(servicesTable)
+            .where(inArray(servicesTable.id, serviceIds));
+          return appointmentResponse(appointment, serviceRows, stylistName);
+        }),
       ),
     ),
   );
@@ -716,6 +761,7 @@ router.post("/appointments", async (req, res): Promise<void> => {
   await ensureSalonSeeded();
   const body = CreateAppointmentBody.safeParse({
     ...req.body,
+    serviceIds: parseServiceIds(req.body?.serviceIds ?? req.body?.serviceId),
     date: toDate(req.body?.date),
     notes: req.body?.notes ?? null,
   });
@@ -725,12 +771,11 @@ router.post("/appointments", async (req, res): Promise<void> => {
   }
 
   await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(${body.data.serviceId})`);
-    const service = await tx
+    await tx.execute(sql`select pg_advisory_xact_lock(${body.data.stylistId})`);
+    const serviceRows = await tx
       .select()
       .from(servicesTable)
-      .where(eq(servicesTable.id, body.data.serviceId))
-      .limit(1);
+      .where(inArray(servicesTable.id, body.data.serviceIds));
     const stylist = await tx
       .select()
       .from(stylistsTable)
@@ -741,14 +786,25 @@ router.post("/appointments", async (req, res): Promise<void> => {
         ),
       )
       .limit(1);
-    if (!service[0] || !stylist[0]) {
+    if (
+      serviceRows.length !== body.data.serviceIds.length ||
+      !stylist[0]
+    ) {
       res.status(400).json({ error: "That service or stylist is no longer available." });
       return;
     }
+    const durationMinutes = serviceRows.reduce(
+      (total, service) => total + service.durationMinutes,
+      0,
+    );
+    const totalPrice = serviceRows.reduce(
+      (total, service) => total + Number(service.price),
+      0,
+    );
 
     const schedule = (stylist[0].schedule ?? []) as StylistScheduleEntry[];
     const weekday = body.data.date.getUTCDay();
-    if (!slotsForSchedule(schedule, weekday, service[0].durationMinutes).includes(body.data.time)) {
+    if (!slotsForSchedule(schedule, weekday, durationMinutes).includes(body.data.time)) {
       const breakConflict = schedule
         .filter((entry) => entry.dayOfWeek === weekday)
         .some((entry) =>
@@ -758,7 +814,7 @@ router.post("/appointments", async (req, res): Promise<void> => {
             const breakEnd = scheduleTimeToMinutes(breakTime.endTime);
             return start !== undefined &&
               start < breakEnd &&
-              breakStart < start + service[0].durationMinutes;
+              breakStart < start + durationMinutes;
           }),
         );
       if (breakConflict) {
@@ -773,7 +829,8 @@ router.post("/appointments", async (req, res): Promise<void> => {
     const existingAppointments = await tx
       .select({
         time: appointmentsTable.time,
-        durationMinutes: servicesTable.durationMinutes,
+        durationMinutes: appointmentsTable.totalDurationMinutes,
+        legacyDurationMinutes: servicesTable.durationMinutes,
       })
       .from(appointmentsTable)
       .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
@@ -783,13 +840,13 @@ router.post("/appointments", async (req, res): Promise<void> => {
           eq(appointmentsTable.date, date),
         ),
       );
+    const bookedAppointments = existingAppointments.map((appointment) => ({
+      time: appointment.time,
+      durationMinutes: appointment.durationMinutes ?? appointment.legacyDurationMinutes,
+    }));
     if (
-      existingAppointments.some((existingAppointment) =>
-        appointmentTimesOverlap(
-          body.data.time,
-          service[0].durationMinutes,
-          existingAppointment,
-        ),
+      bookedAppointments.some((existingAppointment) =>
+        appointmentTimesOverlap(body.data.time, durationMinutes, existingAppointment),
       )
     ) {
       res.status(400).json({ error: "That time was just booked. Please choose another slot." });
@@ -799,7 +856,10 @@ router.post("/appointments", async (req, res): Promise<void> => {
     const [created] = await tx
       .insert(appointmentsTable)
       .values({
-        serviceId: body.data.serviceId,
+        serviceId: body.data.serviceIds[0],
+        serviceIds: body.data.serviceIds,
+        totalDurationMinutes: durationMinutes,
+        totalPrice: totalPrice.toFixed(2),
         stylistId: body.data.stylistId,
         customerName: body.data.customerName,
         email: body.data.email.toLowerCase(),
@@ -813,7 +873,7 @@ router.post("/appointments", async (req, res): Promise<void> => {
 
     res.status(201).json(
       CreateAppointmentResponse.parse(
-        appointmentResponse(created, service[0].name, stylist[0].name),
+        appointmentResponse(created, serviceRows, stylist[0].name),
       ),
     );
   });

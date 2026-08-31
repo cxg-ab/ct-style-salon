@@ -14,6 +14,7 @@ import type { StylistScheduleEntry } from "../lib/salon-seed";
 
 const testDate = "2099-09-07";
 const testEmail = "schedule-regression@example.com";
+const bundleEmail = "bundle-regression@example.com";
 const lifecycleEmail = "stylist-lifecycle@example.com";
 const serviceTestName = "Automated Service Regression";
 const managerHeaders = { "x-salon-manager": "true" };
@@ -23,6 +24,9 @@ let marcoId: number;
 let aishaId: number;
 let danielId: number;
 let signatureCutId: number;
+let beardRitualId: number;
+let bundleDurationMinutes: number;
+let bundleTotalPrice: number;
 let createdServiceId: number | undefined;
 let createdStylistId: number | undefined;
 let originalSchedules = new Map<number, StylistScheduleEntry[]>();
@@ -124,6 +128,7 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${address.port}`;
 
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, testEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, bundleEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, lifecycleEmail));
   if (createdStylistId) {
     await db.delete(stylistsTable).where(eq(stylistsTable.id, createdStylistId));
@@ -142,11 +147,26 @@ before(async () => {
   aishaId = orderedStylists[1]?.id ?? 0;
   danielId = orderedStylists[2]?.id ?? 0;
 
-  const services = await request<Array<{ id: number; name: string }>>("/api/services");
+  const services = await request<
+    Array<{ id: number; name: string; durationMinutes: number; price: number }>
+  >("/api/services");
   assert.equal(services.response.status, 200);
   signatureCutId =
     services.body.find((service) => service.name === "Signature Cut")?.id ?? 0;
-  assert.ok(marcoId && aishaId && danielId && signatureCutId);
+  beardRitualId =
+    services.body.find((service) => service.name === "Beard Ritual")?.id ?? 0;
+  const bundleServices = services.body.filter(
+    (service) => service.id === signatureCutId || service.id === beardRitualId,
+  );
+  bundleDurationMinutes = bundleServices.reduce(
+    (total, service) => total + service.durationMinutes,
+    0,
+  );
+  bundleTotalPrice = bundleServices.reduce(
+    (total, service) => total + Number(service.price),
+    0,
+  );
+  assert.ok(marcoId && aishaId && danielId && signatureCutId && beardRitualId);
 });
 
 after(async () => {
@@ -157,6 +177,7 @@ after(async () => {
     await updateSchedule(stylistId, schedule);
   }
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, testEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, bundleEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, lifecycleEmail));
   if (createdServiceId) {
     await db.delete(servicesTable).where(eq(servicesTable.id, createdServiceId));
@@ -647,6 +668,83 @@ test("booked slots disappear and valid appointment creation succeeds", async () 
   );
   assert.equal(afterBooking.response.status, 200);
   assert.ok(!afterBooking.body[0]?.slots.includes("10:00 AM"));
+});
+
+test("service bundles use combined availability, persist as one appointment, and display in lookup", async () => {
+  await updateSchedule(aishaId, [{
+    dayOfWeek: 1,
+    openTime: "10:00",
+    closeTime: "18:00",
+    breaks: [{ startTime: "11:45", endTime: "13:00" }],
+  }]);
+
+  const availability = await request<Array<{ slots: string[] }>>(
+    `/api/availability?date=2099-09-14&stylistId=${aishaId}&serviceIds=${signatureCutId}&serviceIds=${beardRitualId}`,
+  );
+  assert.equal(availability.response.status, 200);
+  const tenAmOverlapsBreak =
+    10 * 60 < 13 * 60 &&
+    11 * 60 + 45 < 10 * 60 + bundleDurationMinutes;
+  assert.equal(availability.body[0]?.slots.includes("10:00 AM"), !tenAmOverlapsBreak);
+  assert.ok(availability.body[0]?.slots.includes("1:00 PM"));
+
+  const created = await request<{
+    id: number;
+    serviceId: number;
+    serviceIds: number[];
+    serviceName: string;
+    serviceNames: string[];
+    totalDurationMinutes: number;
+    totalPrice: number;
+  }>("/api/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      serviceIds: [signatureCutId, beardRitualId],
+      stylistId: aishaId,
+      customerName: "Bundle Regression",
+      email: bundleEmail,
+      phone: "+971500000000",
+      date: "2099-09-14",
+      time: "1:00 PM",
+    }),
+  });
+  assert.equal(created.response.status, 201);
+  assert.equal(created.body.serviceId, signatureCutId);
+  assert.deepEqual(created.body.serviceIds, [signatureCutId, beardRitualId]);
+  assert.deepEqual(created.body.serviceNames, ["Signature Cut", "Beard Ritual"]);
+  assert.equal(created.body.serviceName, "Signature Cut, Beard Ritual");
+  assert.equal(created.body.totalDurationMinutes, bundleDurationMinutes);
+  assert.equal(created.body.totalPrice, bundleTotalPrice);
+
+  const overlapping = await request<{ error: string }>("/api/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      serviceIds: [beardRitualId],
+      stylistId: aishaId,
+      customerName: "Bundle Overlap",
+      email: bundleEmail,
+      phone: "+971500000000",
+      date: "2099-09-14",
+      time: "1:00 PM",
+    }),
+  });
+  assert.equal(overlapping.response.status, 400);
+  assert.equal(
+    overlapping.body.error,
+    "That time was just booked. Please choose another slot.",
+  );
+
+  const history = await request<Array<{
+    serviceIds: number[];
+    serviceNames: string[];
+    totalDurationMinutes: number;
+    totalPrice: number;
+  }>>(`/api/appointments?email=${encodeURIComponent(bundleEmail)}`);
+  assert.equal(history.response.status, 200);
+  assert.deepEqual(history.body[0]?.serviceIds, [signatureCutId, beardRitualId]);
+  assert.deepEqual(history.body[0]?.serviceNames, ["Signature Cut", "Beard Ritual"]);
+  assert.equal(history.body[0]?.totalDurationMinutes, bundleDurationMinutes);
+  assert.equal(history.body[0]?.totalPrice, bundleTotalPrice);
 });
 
 test("services referenced by appointments cannot be deleted", async () => {

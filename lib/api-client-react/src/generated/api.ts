@@ -135,7 +135,6 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
   return withQueryKey(query, queryOptions.queryKey);
 }
-
 export const getListServicesUrl = () => {
 
 
@@ -490,6 +489,13 @@ export function useListStylists<TData = Awaited<ReturnType<typeof listStylists>>
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+
 export const getCreateStylistUrl = () => {
 
 
@@ -781,6 +787,14 @@ export const getGetAvailabilityUrl = (params: GetAvailabilityParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
+    const explodeParameters = ["serviceIds"];
+
+    if (Array.isArray(value) && explodeParameters.includes(key)) {
+      value.forEach((v) => {
+        normalizedParams.append(key, v === null ? 'null' : String(v));
+      });
+      return;
+    }
 
     if (value !== undefined) {
       normalizedParams.append(key, value === null ? 'null' : String(value))
@@ -793,7 +807,7 @@ export const getGetAvailabilityUrl = (params: GetAvailabilityParams,) => {
 }
 
 /**
- * @summary Get appointment time slots for an employee, service, and date
+ * @summary Get appointment time slots for an employee, service bundle, and date
  */
 export const getAvailability = async (params: GetAvailabilityParams, options?: Parameters<typeof customFetch>[1]): Promise<Availability[]> => {
 
@@ -840,7 +854,7 @@ export type GetAvailabilityQueryError = ErrorType<ErrorResponse>
 
 
 /**
- * @summary Get appointment time slots for an employee, service, and date
+ * @summary Get appointment time slots for an employee, service bundle, and date
  */
 
 export function useGetAvailability<TData = Awaited<ReturnType<typeof getAvailability>>, TError = ErrorType<ErrorResponse>>(
@@ -1086,3 +1100,10 @@ export function useGetSalonSummary<TData = Awaited<ReturnType<typeof getSalonSum
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+

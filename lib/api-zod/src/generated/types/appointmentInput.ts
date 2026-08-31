@@ -7,7 +7,14 @@
  */
 
 export interface AppointmentInput {
-  serviceId: number;
+  /**
+     * @minItems 1
+     * @maxItems 10
+     * @items.minimum 1
+     */
+  serviceIds: number[];
+  /** Legacy single-service input; serviceIds is preferred. */
+  serviceId?: number;
   stylistId: number;
   /** @minLength 2 */
   customerName: string;

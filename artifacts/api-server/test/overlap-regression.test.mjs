@@ -19,6 +19,7 @@ let apiProcess;
 let shortService;
 let longService;
 let marco;
+let originalMarcoSchedule;
 
 function cleanupTestAppointments() {
   if (!process.env.DATABASE_URL) {
@@ -93,6 +94,14 @@ async function updateService(service, changes) {
   });
 }
 
+async function updateStylistSchedule(stylistId, schedule) {
+  return request(`/stylists/${stylistId}/schedule`, {
+    method: "PATCH",
+    headers: managerHeaders,
+    body: JSON.stringify({ schedule }),
+  });
+}
+
 before(async () => {
   cleanupTestAppointments();
 
@@ -109,12 +118,25 @@ before(async () => {
     request("/stylists"),
   ]);
   shortService = services.find((service) => service.name === "Beard Ritual");
-  longService = services.find((service) => service.name === "The CT Style");
-  marco = stylists.find((stylist) => stylist.name === "Marco");
+  longService =
+    services.find((service) => service.name === "The CT Style") ??
+    [...services].sort((left, right) => right.durationMinutes - left.durationMinutes)[0];
+  marco =
+    stylists.find((stylist) => stylist.name === "Marco") ??
+    stylists.find((stylist) =>
+      stylist.schedule.some((entry) => entry.dayOfWeek === 1),
+    ) ??
+    stylists[0];
 
   assert.ok(shortService, "The seeded short service should be available.");
   assert.ok(longService, "The seeded long service should be available.");
   assert.ok(marco, "The seeded Marco stylist should be available.");
+  originalMarcoSchedule = marco.schedule;
+  await updateStylistSchedule(marco.id, [1, 2, 3, 4, 5].map((dayOfWeek) => ({
+    dayOfWeek,
+    openTime: "10:00",
+    closeTime: "20:30",
+  })));
 });
 
 after(async () => {
@@ -124,6 +146,10 @@ after(async () => {
       const restored = await updateService(longService, {
         durationMinutes: longService.durationMinutes,
       });
+      assert.equal(restored.response.status, 200);
+    }
+    if (marco && originalMarcoSchedule) {
+      const restored = await updateStylistSchedule(marco.id, originalMarcoSchedule);
       assert.equal(restored.response.status, 200);
     }
   } finally {

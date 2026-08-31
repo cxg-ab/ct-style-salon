@@ -16,7 +16,6 @@ export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })
 
-
 /**
  * @summary List salon services
  */
@@ -390,12 +389,17 @@ export const UpdateStylistScheduleResponse = zod.object({
 
 
 /**
- * @summary Get appointment time slots for an employee, service, and date
+ * @summary Get appointment time slots for an employee, service bundle, and date
  */
+
+export const getAvailabilityQueryServiceIdsMax = 10;
+
+
+
 export const GetAvailabilityQueryParams = zod.object({
   "date": zod.date(),
   "stylistId": zod.coerce.number().int(),
-  "serviceId": zod.coerce.number().int()
+  "serviceIds": zod.array(zod.coerce.number().int().min(1)).min(1).max(getAvailabilityQueryServiceIdsMax)
 })
 
 export const GetAvailabilityResponseItem = zod.object({
@@ -413,10 +417,21 @@ export const ListAppointmentsQueryParams = zod.object({
   "email": zod.email()
 })
 
+
+
+
+export const listAppointmentsResponseTotalPriceMin = 0;
+
+
+
 export const ListAppointmentsResponseItem = zod.object({
   "id": zod.int(),
-  "serviceId": zod.int(),
-  "serviceName": zod.string(),
+  "serviceId": zod.int().describe('First service in the bundle, retained for backwards compatibility.'),
+  "serviceIds": zod.array(zod.int()).min(1),
+  "serviceNames": zod.array(zod.string()).min(1),
+  "serviceName": zod.string().describe('Comma-separated service names, retained for backwards compatibility.'),
+  "totalDurationMinutes": zod.int().min(1),
+  "totalPrice": zod.number().min(listAppointmentsResponseTotalPriceMin),
   "stylistId": zod.int(),
   "stylistName": zod.string(),
   "customerName": zod.string(),
@@ -434,6 +449,9 @@ export const ListAppointmentsResponse = zod.array(ListAppointmentsResponseItem)
 /**
  * @summary Create an appointment
  */
+
+export const createAppointmentBodyServiceIdsMax = 10;
+
 export const createAppointmentBodyCustomerNameMin = 2;
 
 export const createAppointmentBodyPhoneMin = 7;
@@ -441,7 +459,8 @@ export const createAppointmentBodyPhoneMin = 7;
 
 
 export const CreateAppointmentBody = zod.object({
-  "serviceId": zod.int(),
+  "serviceIds": zod.array(zod.int().min(1)).min(1).max(createAppointmentBodyServiceIdsMax),
+  "serviceId": zod.int().optional().describe('Legacy single-service input; serviceIds is preferred.'),
   "stylistId": zod.int(),
   "customerName": zod.string().min(createAppointmentBodyCustomerNameMin),
   "email": zod.email(),
@@ -451,10 +470,21 @@ export const CreateAppointmentBody = zod.object({
   "notes": zod.string().nullish()
 })
 
+
+
+
+export const createAppointmentResponseTotalPriceMin = 0;
+
+
+
 export const CreateAppointmentResponse = zod.object({
   "id": zod.int(),
-  "serviceId": zod.int(),
-  "serviceName": zod.string(),
+  "serviceId": zod.int().describe('First service in the bundle, retained for backwards compatibility.'),
+  "serviceIds": zod.array(zod.int()).min(1),
+  "serviceNames": zod.array(zod.string()).min(1),
+  "serviceName": zod.string().describe('Comma-separated service names, retained for backwards compatibility.'),
+  "totalDurationMinutes": zod.int().min(1),
+  "totalPrice": zod.number().min(createAppointmentResponseTotalPriceMin),
   "stylistId": zod.int(),
   "stylistName": zod.string(),
   "customerName": zod.string(),
@@ -478,3 +508,4 @@ export const GetSalonSummaryResponse = zod.object({
   "neighborhood": zod.string(),
   "hours": zod.string()
 })
+

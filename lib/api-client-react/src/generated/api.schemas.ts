@@ -128,8 +128,18 @@ export interface Availability {
 
 export interface Appointment {
   id: number;
+  /** First service in the bundle, retained for backwards compatibility. */
   serviceId: number;
+  /** @minItems 1 */
+  serviceIds: number[];
+  /** @minItems 1 */
+  serviceNames: string[];
+  /** Comma-separated service names, retained for backwards compatibility. */
   serviceName: string;
+  /** @minimum 1 */
+  totalDurationMinutes: number;
+  /** @minimum 0 */
+  totalPrice: number;
   stylistId: number;
   stylistName: string;
   customerName: string;
@@ -144,7 +154,14 @@ export interface Appointment {
 }
 
 export interface AppointmentInput {
-  serviceId: number;
+  /**
+     * @minItems 1
+     * @maxItems 10
+     * @items.minimum 1
+     */
+  serviceIds: number[];
+  /** Legacy single-service input; serviceIds is preferred. */
+  serviceId?: number;
   stylistId: number;
   /** @minLength 2 */
   customerName: string;
@@ -172,7 +189,12 @@ export interface ErrorResponse {
 export type GetAvailabilityParams = {
 date: string;
 stylistId: number;
-serviceId: number;
+/**
+ * @minItems 1
+ * @maxItems 10
+ * @items.minimum 1
+ */
+serviceIds: number[];
 };
 
 export type ListAppointmentsParams = {

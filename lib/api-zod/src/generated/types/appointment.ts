@@ -8,8 +8,18 @@
 
 export interface Appointment {
   id: number;
+  /** First service in the bundle, retained for backwards compatibility. */
   serviceId: number;
+  /** @minItems 1 */
+  serviceIds: number[];
+  /** @minItems 1 */
+  serviceNames: string[];
+  /** Comma-separated service names, retained for backwards compatibility. */
   serviceName: string;
+  /** @minimum 1 */
+  totalDurationMinutes: number;
+  /** @minimum 0 */
+  totalPrice: number;
   stylistId: number;
   stylistName: string;
   customerName: string;

@@ -9,7 +9,7 @@ test('booking steps keep employee selection first', () => {
 test('choosing a different employee clears dependent selections', () => {
   assert.deepEqual(selectEmployee(7), {
     stylistId: 7,
-    serviceId: undefined,
+    serviceIds: [],
     time: '',
     step: 2,
   });

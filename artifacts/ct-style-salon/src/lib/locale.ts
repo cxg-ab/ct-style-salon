@@ -30,6 +30,7 @@ type MessageKey =
   | 'fullName' | 'emailAddress' | 'phoneNumber' | 'anythingKnow' | 'notesPlaceholder'
   | 'continue' | 'back' | 'holdingChair' | 'confirmAppointment' | 'bookingTaken'
   | 'yourVisit' | 'selectService' | 'ritualBegins' | 'stylistToChoose' | 'dateToChoose'
+   | 'selectedServices' | 'addAnotherService' | 'removeService' | 'totalDuration' | 'totalPrice'
   | 'noPayment' | 'confirmationInbox' | 'inTheBooks' | 'seeYouSoon' | 'confirmationSent'
   | 'viewAppointments' | 'yourVisits' | 'goodTimes' | 'lookupIntro' | 'lookupPlaceholder'
   | 'findVisits' | 'appointments' | 'nothingBooked' | 'readyHere' | 'bookAVisit'
@@ -100,7 +101,9 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     notesPlaceholder: 'A preference, a question, or simply hello.', continue: 'Continue', back: 'Back',
     holdingChair: 'Holding your chair…', confirmAppointment: 'Confirm appointment',
     bookingTaken: 'That time was just taken. Please go back and choose another.',
-    yourVisit: 'Your visit', selectService: 'Select a service', ritualBegins: 'Your ritual begins with a choice.',
+     yourVisit: 'Your visit', selectService: 'Select services', ritualBegins: 'Your ritual begins with a choice.',
+     selectedServices: 'Selected services', addAnotherService: 'Add another service', removeService: 'Remove service',
+     totalDuration: 'Total duration', totalPrice: 'Total',
     stylistToChoose: 'Stylist to be chosen', dateToChoose: 'Date to be chosen',
     noPayment: 'No payment required. We will send a gentle confirmation to your inbox.',
     confirmationInbox: 'A confirmation is headed to', inTheBooks: 'It is in the books',
@@ -190,7 +193,9 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     notesPlaceholder: 'تفضيل، سؤال، أو مجرد تحية.', continue: 'متابعة', back: 'رجوع',
     holdingChair: 'نحجز مقعدك…', confirmAppointment: 'تأكيد الموعد',
     bookingTaken: 'تم حجز هذا الوقت للتو. ارجع واختر وقتاً آخر.',
-    yourVisit: 'زيارتك', selectService: 'اختر خدمة', ritualBegins: 'تبدأ تجربتك باختيارك.',
+     yourVisit: 'زيارتك', selectService: 'اختر الخدمات', ritualBegins: 'تبدأ تجربتك باختيارك.',
+     selectedServices: 'الخدمات المختارة', addAnotherService: 'إضافة خدمة أخرى', removeService: 'إزالة الخدمة',
+     totalDuration: 'المدة الإجمالية', totalPrice: 'الإجمالي',
     stylistToChoose: 'المصفف لم يُختر بعد', dateToChoose: 'التاريخ لم يُختر بعد',
     noPayment: 'لا حاجة للدفع. سنرسل تأكيداً لطيفاً إلى بريدك.',
     confirmationInbox: 'سيرسل التأكيد إلى', inTheBooks: 'تم تسجيل الموعد',

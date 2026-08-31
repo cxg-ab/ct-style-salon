@@ -329,7 +329,7 @@ paths:
     get:
       operationId: getAvailability
       tags: [salon]
-      summary: Get appointment time slots for an employee, service, and date
+      summary: Get appointment time slots for an employee, service bundle, and date
       parameters:
         - name: date
           in: query
@@ -342,11 +342,19 @@ paths:
           required: true
           schema:
             type: integer
-        - name: serviceId
+        - name: serviceIds
           in: query
           required: true
+          style: form
+          explode: true
           schema:
-            type: integer
+            type: array
+            minItems: 1
+            maxItems: 10
+            uniqueItems: true
+            items:
+              type: integer
+              minimum: 1
       responses:
         "200":
           description: Available time slots for the selected employee
@@ -665,8 +673,26 @@ components:
           type: integer
         serviceId:
           type: integer
+          description: First service in the bundle, retained for backwards compatibility.
+        serviceIds:
+          type: array
+          minItems: 1
+          items:
+            type: integer
+        serviceNames:
+          type: array
+          minItems: 1
+          items:
+            type: string
         serviceName:
           type: string
+          description: Comma-separated service names, retained for backwards compatibility.
+        totalDurationMinutes:
+          type: integer
+          minimum: 1
+        totalPrice:
+          type: number
+          minimum: 0
         stylistId:
           type: integer
         stylistName:
@@ -692,7 +718,11 @@ components:
       required:
         - id
         - serviceId
+        - serviceIds
+        - serviceNames
         - serviceName
+        - totalDurationMinutes
+        - totalPrice
         - stylistId
         - stylistName
         - customerName
@@ -706,8 +736,17 @@ components:
     AppointmentInput:
       type: object
       properties:
+        serviceIds:
+          type: array
+          minItems: 1
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
         serviceId:
           type: integer
+          description: Legacy single-service input; serviceIds is preferred.
         stylistId:
           type: integer
         customerName:
@@ -727,7 +766,7 @@ components:
         notes:
           type: ["string", "null"]
       required:
-        - serviceId
+        - serviceIds
         - stylistId
         - customerName
         - email

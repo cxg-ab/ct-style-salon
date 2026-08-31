@@ -9,6 +9,7 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { z } from "zod/v4";
 
 export const servicesTable = pgTable("salon_services", {
@@ -44,7 +45,12 @@ export const stylistsTable = pgTable("salon_stylists", {
 
 export const appointmentsTable = pgTable("salon_appointments", {
   id: serial("id").primaryKey(),
+  // serviceId remains as the first service for backwards compatibility with
+  // existing records and integrations. serviceIds is the canonical bundle.
   serviceId: integer("service_id").notNull(),
+  serviceIds: integer("service_ids").array().notNull().default(sql`ARRAY[]::integer[]`),
+  totalDurationMinutes: integer("total_duration_minutes"),
+  totalPrice: numeric("total_price", { precision: 10, scale: 2 }),
   stylistId: integer("stylist_id").notNull(),
   customerName: text("customer_name").notNull(),
   email: text("email").notNull(),

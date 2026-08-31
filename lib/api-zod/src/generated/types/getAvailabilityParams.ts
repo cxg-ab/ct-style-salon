@@ -9,5 +9,10 @@
 export type GetAvailabilityParams = {
 date: Date;
 stylistId: number;
-serviceId: number;
+/**
+ * @minItems 1
+ * @maxItems 10
+ * @items.minimum 1
+ */
+serviceIds: number[];
 };

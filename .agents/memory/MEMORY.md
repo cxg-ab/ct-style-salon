@@ -1,1 +1,2 @@
 - [Orval and Zod compatibility](orval-zod-compatibility.md) — generated validators require the workspace Zod major version expected by Orval.
+- [Salon regression fixtures](salon-regression-fixtures.md) — API tests should derive service/stylist assumptions from live records because persisted seed data may be customized.
