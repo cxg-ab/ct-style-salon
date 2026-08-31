@@ -261,6 +261,18 @@ test("service management rejects unauthenticated requests", async () => {
   assert.equal(deletion.body?.error, "Sign in as a salon manager to make changes.");
 });
 
+test("service management rejects authenticated non-managers", async () => {
+  const result = await request(`/api/services/${signatureCutId}`, {
+    method: "DELETE",
+    headers: { "x-salon-user": "true" },
+  });
+
+  assert.equal(result.response.status, 403);
+  assert.deepEqual(result.body, {
+    error: "Your account does not have salon manager access.",
+  });
+});
+
 test("service management rejects incomplete requests", async () => {
   const incomplete = {
     name: "Incomplete Service",

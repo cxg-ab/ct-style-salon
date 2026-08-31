@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from '@clerk/react';
+import { ClerkProvider, SignIn, SignUp, useAuth, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import {
@@ -908,6 +908,7 @@ function SignUpPage() {
 function ManagerRoute() {
   const { t } = useLocale();
   const { isLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
 
   if (!isLoaded) {
     return <main className="mx-auto flex min-h-[calc(100dvh-76px)] max-w-[1000px] items-center px-5 py-14 sm:px-8" data-testid="manager-auth-loading"><div className="w-full"><div className="skeleton h-10 w-48 rounded-xl" /><p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">{t('signInLoading')}</p></div></main>;
@@ -921,6 +922,18 @@ function ManagerRoute() {
            <h1 className="mt-4 font-display text-5xl leading-[.88] sm:text-7xl">{t('managerSignInTitle')}</h1>
            <p className="mt-6 max-w-md text-base leading-7 text-[hsl(var(--muted-foreground))]">{t('managerSignInIntro')}</p>
            <Link href="/sign-in" className="mt-8 inline-flex items-center gap-2 rounded-full bg-[hsl(var(--primary))] px-6 py-4 text-xs font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))]" data-testid="link-manager-sign-in">{t('signIn')} <ArrowRight size={15} /></Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (user?.publicMetadata.role !== 'manager') {
+    return (
+      <main className="mx-auto flex min-h-[calc(100dvh-76px)] max-w-[760px] items-center px-5 py-16 sm:px-8">
+        <div className="w-full rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 sm:p-12" data-testid="manager-access-denied">
+          <p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('managerWorkspace')}</p>
+          <h1 className="mt-4 font-display text-5xl leading-[.88] sm:text-7xl">{t('managerAccessDeniedTitle')}</h1>
+          <p className="mt-6 max-w-md text-base leading-7 text-[hsl(var(--muted-foreground))]">{t('managerAccessDeniedIntro')}</p>
         </div>
       </main>
     );

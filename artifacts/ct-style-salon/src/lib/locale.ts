@@ -28,7 +28,7 @@ type MessageKey =
   | 'noPayment' | 'confirmationInbox' | 'inTheBooks' | 'seeYouSoon' | 'confirmationSent'
   | 'viewAppointments' | 'yourVisits' | 'goodTimes' | 'lookupIntro' | 'lookupPlaceholder'
   | 'findVisits' | 'appointments' | 'nothingBooked' | 'readyHere' | 'bookAVisit'
-  | 'managerSignInTitle' | 'managerSignInIntro' | 'signIn' | 'notReachStudio'
+  | 'managerSignInTitle' | 'managerSignInIntro' | 'managerAccessDeniedTitle' | 'managerAccessDeniedIntro' | 'signIn' | 'notReachStudio'
   | 'tryAgain' | 'errorRequired' | 'errorDuration' | 'errorPrice' | 'serviceSaved'
   | 'serviceAdded' | 'serviceUpdated' | 'serviceSaveError' | 'noManagedServices'
   | 'signInLoading' | 'confirmed' | 'pending' | 'cancelled' | 'collapseDetails' | 'expandDetails'
@@ -95,6 +95,8 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     nothingBooked: 'Nothing booked yet.', readyHere: 'When you are ready, we will be here.',
     bookAVisit: 'Book a visit', managerSignInTitle: 'Sign in to keep chairs ready.',
     managerSignInIntro: 'This workspace is reserved for the salon team. Sign in with your manager account to update services and employee schedules.',
+    managerAccessDeniedTitle: 'Manager access required.',
+    managerAccessDeniedIntro: 'This signed-in account is not approved to manage salon services or employee schedules.',
     signIn: 'Sign in', notReachStudio: 'We could not reach the studio just now.', tryAgain: 'Try again',
     errorRequired: 'Name, description, category, price, and duration are required.',
     errorDuration: 'Duration must be a positive whole number of minutes.',
@@ -172,6 +174,8 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     nothingBooked: 'لا توجد حجوزات بعد.', readyHere: 'سنكون هنا عندما تكون مستعداً.',
     bookAVisit: 'احجز زيارة', managerSignInTitle: 'سجّل الدخول لإبقاء المقاعد جاهزة.',
     managerSignInIntro: 'هذه المساحة مخصصة لفريق الصالون. سجّل الدخول بحساب الإدارة لتحديث الخدمات وجداول الموظفين.',
+    managerAccessDeniedTitle: 'يلزم الوصول كمدير.',
+    managerAccessDeniedIntro: 'هذا الحساب المسجّل دخوله غير معتمد لإدارة خدمات الصالون أو جداول الموظفين.',
     signIn: 'تسجيل الدخول', notReachStudio: 'تعذر الوصول إلى الاستوديو الآن.', tryAgain: 'حاول مجدداً',
     errorRequired: 'الاسم والوصف والفئة والسعر والمدة مطلوبة.',
     errorDuration: 'يجب أن تكون المدة رقماً صحيحاً موجباً بالدقائق.',

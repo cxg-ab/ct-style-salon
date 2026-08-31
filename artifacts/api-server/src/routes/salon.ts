@@ -1,5 +1,5 @@
 import { and, desc, eq, ne, sql } from "drizzle-orm";
-import { getAuth } from "@clerk/express";
+import { clerkClient, getAuth } from "@clerk/express";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   CreateAppointmentBody,
@@ -151,17 +151,32 @@ type AuthenticatedRequest = Request & {
   salonManagerId?: string;
 };
 
-function requireSalonManager(req: AuthenticatedRequest, res: Response): boolean {
+async function requireSalonManager(req: AuthenticatedRequest, res: Response): Promise<boolean> {
   const auth = getAuth(req);
   const userId = auth?.userId;
   const testManager =
     process.env.NODE_ENV === "test" && req.header("x-salon-manager") === "true"
       ? "test-manager"
       : undefined;
+  const testNonManager =
+    process.env.NODE_ENV === "test" && req.header("x-salon-user") === "true";
 
-  if (!userId && !testManager) {
+  if (!userId && !testManager && !testNonManager) {
     res.status(401).json({ error: "Sign in as a salon manager to make changes." });
     return false;
+  }
+
+  if (testNonManager) {
+    res.status(403).json({ error: "Your account does not have salon manager access." });
+    return false;
+  }
+
+  if (userId) {
+    const user = await clerkClient.users.getUser(userId);
+    if (user.publicMetadata.role !== "manager") {
+      res.status(403).json({ error: "Your account does not have salon manager access." });
+      return false;
+    }
   }
 
   req.salonManagerId = userId ?? testManager;
@@ -257,7 +272,7 @@ function serviceResponse(row: typeof servicesTable.$inferSelect) {
 }
 
 router.post("/services", async (req, res): Promise<void> => {
-  if (!requireSalonManager(req, res)) {
+  if (!(await requireSalonManager(req, res))) {
     return;
   }
 
@@ -288,7 +303,7 @@ router.post("/services", async (req, res): Promise<void> => {
 });
 
 router.patch("/services/:serviceId", async (req, res): Promise<void> => {
-  if (!requireSalonManager(req, res)) {
+  if (!(await requireSalonManager(req, res))) {
     return;
   }
 
@@ -329,7 +344,7 @@ router.patch("/services/:serviceId", async (req, res): Promise<void> => {
 });
 
 router.delete("/services/:serviceId", async (req, res): Promise<void> => {
-  if (!requireSalonManager(req, res)) {
+  if (!(await requireSalonManager(req, res))) {
     return;
   }
 
@@ -378,7 +393,7 @@ router.get("/stylists", async (_req, res): Promise<void> => {
 });
 
 router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
-  if (!requireSalonManager(req, res)) {
+  if (!(await requireSalonManager(req, res))) {
     return;
   }
 
@@ -430,7 +445,7 @@ router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
 });
 
 router.patch("/stylists/:stylistId/schedule", async (req, res): Promise<void> => {
-  if (!requireSalonManager(req, res)) {
+  if (!(await requireSalonManager(req, res))) {
     return;
   }
 
