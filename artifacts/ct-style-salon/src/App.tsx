@@ -54,12 +54,12 @@ function Shell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-40 border-b border-[hsl(var(--border)/.72)] bg-[hsl(var(--background)/.91)] backdrop-blur-xl">
         <div className="mx-auto flex h-[76px] max-w-[1240px] items-center justify-between px-5 sm:px-8">
           <Link href="/" className="group flex items-center gap-3" data-testid="link-brand">
-            <span className="flex h-10 items-center rounded-full bg-[hsl(var(--secondary))] px-3 transition-transform duration-300 group-hover:-translate-y-0.5">
-              <img src={`${import.meta.env.BASE_URL}ct-style-logo-transparent.png`} alt="CT Style Salon" className="w-[92px] object-contain" />
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--accent))] transition-transform duration-300 group-hover:rotate-[-8deg]">
+              <Scissors size={18} strokeWidth={1.8} />
             </span>
             <span className="leading-none">
-              <span className="block text-[12px] font-bold tracking-[.18em] text-[hsl(var(--foreground))]">SALON</span>
-              <span className="mt-1 block font-mono-ui text-[9px] tracking-[.22em] text-[hsl(var(--muted-foreground))]">MASDAR · ABU DHABI</span>
+              <span className="block text-[13px] font-bold tracking-[.18em] text-[hsl(var(--foreground))]">CT STYLE</span>
+              <span className="mt-1 block font-mono-ui text-[9px] tracking-[.3em] text-[hsl(var(--muted-foreground))]">SALON / STUDIO</span>
             </span>
           </Link>
           <nav className="hidden items-center gap-9 md:flex" aria-label="Primary navigation">
