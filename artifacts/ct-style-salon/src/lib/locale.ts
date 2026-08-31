@@ -22,7 +22,7 @@ type MessageKey =
   | 'removeEmployee' | 'removeEmployeeConfirm' | 'employeeRequired' | 'initialsTooLong'
   | 'workingSchedule' | 'saveEmployee' | 'employeeSaveError' | 'employeeAdded'
   | 'employeeUpdated' | 'employeeRemoved' | 'employeeRemoveError' | 'jobTitle' | 'initials'
-   | 'accent' | 'photoUrl' | 'photoUrlHint' | 'profilePhoto' | 'optional'
+    | 'accent' | 'photoUrl' | 'photoUrlHint' | 'photoUpload' | 'choosePhoto' | 'replacePhoto' | 'removePhoto' | 'uploading' | 'photoUploadHint' | 'photoUploadError' | 'profilePhoto' | 'optional'
   | 'reserveYourChair' | 'goodHourStarts' | 'bookingIntro' | 'employee' | 'service'
   | 'dateTime' | 'details' | 'choosePerson' | 'whoSee' | 'teamOnWay' | 'chooseService'
   | 'whatDoing' | 'menuRefreshing' | 'mostLoved' | 'findTime' | 'whenFeelsRight'
@@ -86,8 +86,10 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     employeeSaveError: 'We could not save this employee. Check the details and try again.',
     employeeAdded: 'has been added.', employeeUpdated: 'has been updated.',
     employeeRemoved: 'has been removed from booking.', employeeRemoveError: 'We could not remove this employee. Please try again.',
-    jobTitle: 'Job title', initials: 'Initials', accent: 'Accent', photoUrl: 'Photo URL',
-    photoUrlHint: 'Optional. Use a public image link; initials are used if it cannot be loaded.',
+     jobTitle: 'Job title', initials: 'Initials', accent: 'Accent', photoUrl: 'Photo URL',
+     photoUrlHint: 'Optional. Use a public image link; initials are used if it cannot be loaded.',
+     photoUpload: 'Profile photo', choosePhoto: 'Choose photo', replacePhoto: 'Replace photo', removePhoto: 'Remove photo',
+     uploading: 'Uploading', photoUploadHint: 'PNG, JPEG, or WebP up to 5 MB.', photoUploadError: 'Choose an image up to 5 MB and try again.',
     profilePhoto: 'profile photo', optional: 'optional',
     reserveYourChair: 'Reserve your chair', goodHourStarts: 'A good hour starts here.',
     bookingIntro: 'Choose your person, then your ritual. We will show times that fit their schedule.',
@@ -180,8 +182,10 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     employeeSaveError: 'تعذر حفظ الموظف. تحقق من البيانات وحاول مرة أخرى.',
     employeeAdded: 'تمت إضافته.', employeeUpdated: 'تم تحديثه.',
     employeeRemoved: 'تمت إزالته من الحجوزات.', employeeRemoveError: 'تعذر إزالة الموظف. حاول مرة أخرى.',
-    jobTitle: 'المسمى الوظيفي', initials: 'الأحرف الأولى', accent: 'اللون', photoUrl: 'رابط الصورة',
-    photoUrlHint: 'اختياري. استخدم رابط صورة عام؛ ستظهر الأحرف الأولى إذا تعذر تحميلها.',
+     jobTitle: 'المسمى الوظيفي', initials: 'الأحرف الأولى', accent: 'اللون', photoUrl: 'رابط الصورة',
+     photoUrlHint: 'اختياري. استخدم رابط صورة عام؛ ستظهر الأحرف الأولى إذا تعذر تحميلها.',
+     photoUpload: 'الصورة الشخصية', choosePhoto: 'اختيار صورة', replacePhoto: 'استبدال الصورة', removePhoto: 'إزالة الصورة',
+     uploading: 'جارٍ الرفع', photoUploadHint: 'PNG أو JPEG أو WebP حتى 5 ميغابايت.', photoUploadError: 'اختر صورة بحجم لا يتجاوز 5 ميغابايت وحاول مرة أخرى.',
     profilePhoto: 'الصورة الشخصية', optional: 'اختياري',
     reserveYourChair: 'احجز مقعدك', goodHourStarts: 'ساعة جميلة تبدأ من هنا.',
     bookingIntro: 'اختر الشخص ثم طقسك المفضل. سنعرض الأوقات التي تناسب جدوله.',

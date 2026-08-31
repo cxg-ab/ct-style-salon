@@ -629,7 +629,6 @@ components:
           type: string
         photoUrl:
           type: string
-          format: uri
           nullable: true
         active:
           type: boolean
@@ -667,7 +666,6 @@ components:
           minLength: 1
         photoUrl:
           type: string
-          format: uri
           nullable: true
         schedule:
           type: array
@@ -702,7 +700,6 @@ components:
           minLength: 1
         photoUrl:
           type: string
-          format: uri
           nullable: true
         schedule:
           type: array

@@ -47,6 +47,7 @@ import {
   useUpdateService,
   useUpdateStylist,
   useUpdateStylistSchedule,
+  requestUploadUrl,
   type Service,
   type ServiceInput,
   type Appointment,
@@ -396,11 +397,31 @@ function validateScheduleInForm(schedule: StylistScheduleEntry[]) {
 
 function StylistAvatar({ stylist, className = 'h-12 w-12', alt }: { stylist: Stylist; className?: string; alt?: string }) {
   const [imageFailed, setImageFailed] = useState(false);
-  useEffect(() => setImageFailed(false), [stylist.photoUrl]);
-  if (stylist.photoUrl && !imageFailed) {
-    return <img src={stylist.photoUrl} alt={alt ?? stylist.name} className={`${className} rounded-full object-cover`} onError={() => setImageFailed(true)} />;
+  const photoSource = stylistPhotoSource(stylist.photoUrl);
+  useEffect(() => setImageFailed(false), [photoSource]);
+  if (photoSource && !imageFailed) {
+    return <img src={photoSource} alt={alt ?? stylist.name} className={`${className} rounded-full object-cover`} onError={() => setImageFailed(true)} />;
   }
   return <span className={`${className} grid place-items-center rounded-full text-sm font-bold`} style={{ backgroundColor: `${stylist.accent}25`, color: stylist.accent }} aria-label={alt ?? stylist.name}>{stylist.initials}</span>;
+}
+
+function stylistPhotoSource(photoUrl?: string | null): string | undefined {
+  if (!photoUrl) return undefined;
+  return photoUrl.startsWith('/objects/') ? `/api/storage${photoUrl}` : photoUrl;
+}
+
+function uploadFileToStorage(file: File, uploadURL: string, onProgress: (progress: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('PUT', uploadURL);
+    request.setRequestHeader('Content-Type', file.type);
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+    request.onload = () => request.status >= 200 && request.status < 300 ? resolve() : reject(new Error('Photo upload failed.'));
+    request.onerror = () => reject(new Error('Photo upload failed.'));
+    request.send(file);
+  });
 }
 
 function ScheduleFields({
@@ -1138,18 +1159,62 @@ function EmployeeProfileEditor({
   const { t } = useLocale();
   const [form, setForm] = useState<EmployeeFormState>(() => stylist ? employeeToForm(stylist) : emptyEmployeeForm);
   const [feedback, setFeedback] = useState<string>();
+  const [photoPreview, setPhotoPreview] = useState<string | undefined>(() => stylistPhotoSource(stylist?.photoUrl));
+  const [photoUpload, setPhotoUpload] = useState<{ status: 'idle' | 'uploading' | 'success' | 'error'; progress: number }>({ status: 'idle', progress: 0 });
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const previewObjectUrlRef = useRef<string | undefined>(undefined);
   const createStylist = useCreateStylist();
   const updateStylist = useUpdateStylist();
   const isPending = createStylist.isPending || updateStylist.isPending;
 
   useEffect(() => {
     setForm(stylist ? employeeToForm(stylist) : emptyEmployeeForm);
+    if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
+    previewObjectUrlRef.current = undefined;
+    setPhotoPreview(stylistPhotoSource(stylist?.photoUrl));
+    setPhotoUpload({ status: 'idle', progress: 0 });
     setFeedback(undefined);
   }, [stylist?.id]);
+
+  useEffect(() => () => {
+    if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
+  }, []);
 
   const updateField = <K extends keyof EmployeeFormState>(field: K, value: EmployeeFormState[K]) => {
     setFeedback(undefined);
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const choosePhoto = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) {
+      setFeedback(t('photoUploadError'));
+      setPhotoUpload({ status: 'error', progress: 0 });
+      return;
+    }
+    if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
+    const previewUrl = URL.createObjectURL(file);
+    previewObjectUrlRef.current = previewUrl;
+    setPhotoPreview(previewUrl);
+    setFeedback(undefined);
+    setPhotoUpload({ status: 'uploading', progress: 0 });
+    try {
+      const upload = await requestUploadUrl({ name: file.name, size: file.size, contentType: file.type });
+      await uploadFileToStorage(file, upload.uploadURL, (progress) => setPhotoUpload({ status: 'uploading', progress }));
+      updateField('photoUrl', upload.objectPath);
+      setPhotoUpload({ status: 'success', progress: 100 });
+    } catch {
+      setPhotoUpload({ status: 'error', progress: 0 });
+      setFeedback(t('photoUploadError'));
+    }
+  };
+
+  const clearPhoto = () => {
+    if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
+    previewObjectUrlRef.current = undefined;
+    setPhotoPreview(undefined);
+    updateField('photoUrl', '');
+    setPhotoUpload({ status: 'idle', progress: 0 });
   };
 
   const save = (event: React.FormEvent) => {
@@ -1214,10 +1279,17 @@ function EmployeeProfileEditor({
         <label className="text-xs font-semibold">{t('accent')}
           <input required value={form.accent} onChange={(event) => updateField('accent', event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-employee-accent" />
         </label>
-        <label className="text-xs font-semibold sm:col-span-2">{t('photoUrl')} <span className="font-normal text-[hsl(var(--muted-foreground))]">({t('optional')})</span>
-          <input type="url" value={form.photoUrl} onChange={(event) => updateField('photoUrl', event.target.value)} placeholder="https://…" className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-employee-photo-url" />
-          <span className="mt-1 block text-[11px] font-normal text-[hsl(var(--muted-foreground))]">{t('photoUrlHint')}</span>
-        </label>
+        <div className="sm:col-span-2">
+          <p className="text-xs font-semibold">{t('photoUpload')} <span className="font-normal text-[hsl(var(--muted-foreground))]">({t('optional')})</span></p>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            {photoPreview ? <img src={photoPreview} alt={t('profilePhoto')} className="h-16 w-16 rounded-full object-cover" /> : <span className="grid h-16 w-16 place-items-center rounded-full bg-[hsl(var(--secondary))] font-display text-lg text-[hsl(var(--card))]">{form.initials || '?'}</span>}
+            <input ref={photoInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => { void choosePhoto(event.target.files?.[0]); event.target.value = ''; }} data-testid="input-employee-photo" />
+            <button type="button" onClick={() => photoInputRef.current?.click()} disabled={photoUpload.status === 'uploading'} className="rounded-full border border-[hsl(var(--border))] px-4 py-2.5 text-[11px] font-bold tracking-[.08em] hover:border-[hsl(var(--primary))] disabled:opacity-60" data-testid="button-choose-employee-photo">{photoPreview ? t('replacePhoto') : t('choosePhoto')}</button>
+            {photoPreview && <button type="button" onClick={clearPhoto} disabled={photoUpload.status === 'uploading'} className="rounded-full border border-[hsl(var(--destructive)/.35)] px-4 py-2.5 text-[11px] font-bold tracking-[.08em] text-[hsl(var(--destructive))] disabled:opacity-60" data-testid="button-remove-employee-photo">{t('removePhoto')}</button>}
+          </div>
+          <p className="mt-2 text-[11px] text-[hsl(var(--muted-foreground))]">{t('photoUploadHint')}</p>
+          {photoUpload.status === 'uploading' && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[hsl(var(--muted))]" aria-label={`${t('uploading')} ${photoUpload.progress}%`}><div className="h-full bg-[hsl(var(--primary))] transition-all" style={{ width: `${photoUpload.progress}%` }} /></div>}
+        </div>
         <label className="text-xs font-semibold sm:col-span-2">{t('description')}
           <textarea required value={form.bio} onChange={(event) => updateField('bio', event.target.value)} rows={3} className="mt-2 w-full resize-y rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 py-3 text-sm font-normal" data-testid="input-employee-bio" />
         </label>
@@ -1229,7 +1301,7 @@ function EmployeeProfileEditor({
         <ScheduleFields schedule={form.schedule} onChange={(schedule) => updateField('schedule', schedule)} idPrefix={stylist ? String(stylist.id) : 'new'} />
       </div>
       {feedback && <p className="mt-4 text-sm text-[hsl(var(--destructive))]" role="alert" data-testid="status-employee-error">{feedback}</p>}
-      <button type="submit" disabled={isPending} className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid="button-save-employee">
+      <button type="submit" disabled={isPending || photoUpload.status === 'uploading'} className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid="button-save-employee">
         {isPending ? t('saving') : t('saveEmployee')} <Check size={14} />
       </button>
     </form>

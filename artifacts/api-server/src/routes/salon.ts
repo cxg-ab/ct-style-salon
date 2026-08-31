@@ -282,6 +282,9 @@ function validateStylistPayload(payload: {
     return "Initials must be five characters or fewer.";
   }
   if (payload.photoUrl) {
+    if (payload.photoUrl.startsWith("/objects/")) {
+      return validateSchedule(payload.schedule);
+    }
     try {
       const url = new URL(payload.photoUrl);
       if (!["http:", "https:"].includes(url.protocol)) {
