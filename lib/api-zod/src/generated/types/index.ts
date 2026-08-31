@@ -15,6 +15,8 @@ export * from './healthStatus';
 export * from './listAppointmentsParams';
 export * from './salonSummary';
 export * from './service';
+export * from './serviceInput';
+export * from './serviceUpdate';
 export * from './stylist';
 export * from './stylistScheduleEntry';
 export * from './stylistScheduleUpdate';

@@ -19,6 +19,34 @@ export interface Service {
   featured: boolean;
 }
 
+export interface ServiceInput {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  description: string;
+  /** @minimum 1 */
+  durationMinutes: number;
+  /** @minimum 0 */
+  price: number;
+  /** @minLength 1 */
+  category: string;
+  featured: boolean;
+}
+
+export interface ServiceUpdate {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  description: string;
+  /** @minimum 1 */
+  durationMinutes: number;
+  /** @minimum 0 */
+  price: number;
+  /** @minLength 1 */
+  category: string;
+  featured: boolean;
+}
+
 export interface StylistScheduleEntry {
   /**
      * @minimum 0

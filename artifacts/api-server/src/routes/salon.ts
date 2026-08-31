@@ -3,6 +3,8 @@ import { Router, type IRouter, type Request } from "express";
 import {
   CreateAppointmentBody,
   CreateAppointmentResponse,
+  CreateServiceBody,
+  CreateServiceResponse,
   GetAvailabilityQueryParams,
   GetAvailabilityResponse,
   GetSalonSummaryResponse,
@@ -10,6 +12,9 @@ import {
   ListAppointmentsResponse,
   ListServicesResponse,
   ListStylistsResponse,
+  UpdateServiceBody,
+  UpdateServiceParams,
+  UpdateServiceResponse,
   UpdateStylistScheduleBody,
   UpdateStylistScheduleParams,
   UpdateStylistScheduleResponse,
@@ -158,6 +163,118 @@ router.get("/services", async (_req, res): Promise<void> => {
       rows.map((row) => ({ ...row, price: Number(row.price) })),
     ),
   );
+});
+
+function validateServicePayload(payload: {
+  name: string;
+  description: string;
+  durationMinutes: number;
+  price: number;
+  category: string;
+  featured: boolean;
+}): string | undefined {
+  if (
+    !payload.name.trim() ||
+    !payload.description.trim() ||
+    !payload.category.trim()
+  ) {
+    return "Name, description, and category are required.";
+  }
+  if (
+    !Number.isInteger(payload.durationMinutes) ||
+    payload.durationMinutes <= 0
+  ) {
+    return "Duration must be a positive whole number of minutes.";
+  }
+  if (
+    !Number.isFinite(payload.price) ||
+    payload.price < 0 ||
+    Number(payload.price.toFixed(2)) !== payload.price
+  ) {
+    return "Enter a valid price with no more than two decimal places.";
+  }
+  return undefined;
+}
+
+function serviceResponse(row: typeof servicesTable.$inferSelect) {
+  return {
+    ...row,
+    price: Number(row.price),
+  };
+}
+
+router.post("/services", async (req, res): Promise<void> => {
+  if (!isSalonManager(req)) {
+    res.status(403).json({ error: "Manager access is required to update services." });
+    return;
+  }
+
+  await ensureSalonSeeded();
+  const body = CreateServiceBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Enter a complete service with a valid duration and price." });
+    return;
+  }
+  const validationError = validateServicePayload(body.data);
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
+
+  const [created] = await db
+    .insert(servicesTable)
+    .values({
+      ...body.data,
+      name: body.data.name.trim(),
+      description: body.data.description.trim(),
+      category: body.data.category.trim(),
+      price: body.data.price.toFixed(2),
+    })
+    .returning();
+
+  res.status(201).json(CreateServiceResponse.parse(serviceResponse(created)));
+});
+
+router.patch("/services/:serviceId", async (req, res): Promise<void> => {
+  if (!isSalonManager(req)) {
+    res.status(403).json({ error: "Manager access is required to update services." });
+    return;
+  }
+
+  await ensureSalonSeeded();
+  const params = UpdateServiceParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Choose a valid service." });
+    return;
+  }
+  const body = UpdateServiceBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Enter a complete service with a valid duration and price." });
+    return;
+  }
+  const validationError = validateServicePayload(body.data);
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
+
+  const [updated] = await db
+    .update(servicesTable)
+    .set({
+      ...body.data,
+      name: body.data.name.trim(),
+      description: body.data.description.trim(),
+      category: body.data.category.trim(),
+      price: body.data.price.toFixed(2),
+    })
+    .where(eq(servicesTable.id, params.data.serviceId))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "Service not found." });
+    return;
+  }
+
+  res.json(UpdateServiceResponse.parse(serviceResponse(updated)));
 });
 
 router.get("/stylists", async (_req, res): Promise<void> => {

@@ -29,6 +29,8 @@ import type {
   ListAppointmentsParams,
   SalonSummary,
   Service,
+  ServiceInput,
+  ServiceUpdate,
   Stylist,
   StylistScheduleUpdate
 } from './api.schemas';
@@ -214,6 +216,149 @@ export function useListServices<TData = Awaited<ReturnType<typeof listServices>>
 
 
 
+
+export const getCreateServiceUrl = () => {
+
+
+
+
+  return `/api/services`
+}
+
+/**
+ * @summary Create a salon service
+ */
+export const createService = async (serviceInput: ServiceInput, options?: Parameters<typeof customFetch>[1]): Promise<Service> => {
+
+  return customFetch<Service>(getCreateServiceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(serviceInput)
+  }
+);}
+
+
+
+
+
+export const getCreateServiceMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createService>>, TError,{data: BodyType<ServiceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createService>>, TError,{data: BodyType<ServiceInput>}, TContext> => {
+
+const mutationKey = ['createService'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createService>>, {data: BodyType<ServiceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createService(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateServiceMutationResult = NonNullable<Awaited<ReturnType<typeof createService>>>
+    export type CreateServiceMutationBody = BodyType<ServiceInput>
+    export type CreateServiceMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create a salon service
+ */
+export const useCreateService = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createService>>, TError,{data: BodyType<ServiceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createService>>,
+        TError,
+        {data: BodyType<ServiceInput>},
+        TContext
+      > => {
+      return useMutation(getCreateServiceMutationOptions(options));
+    }
+
+export const getUpdateServiceUrl = (serviceId: number,) => {
+
+
+
+
+  return `/api/services/${serviceId}`
+}
+
+/**
+ * @summary Update a salon service
+ */
+export const updateService = async (serviceId: number,
+    serviceUpdate: ServiceUpdate, options?: Parameters<typeof customFetch>[1]): Promise<Service> => {
+
+  return customFetch<Service>(getUpdateServiceUrl(serviceId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(serviceUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateServiceMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateService>>, TError,{serviceId: number;data: BodyType<ServiceUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateService>>, TError,{serviceId: number;data: BodyType<ServiceUpdate>}, TContext> => {
+
+const mutationKey = ['updateService'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateService>>, {serviceId: number;data: BodyType<ServiceUpdate>}> = (props) => {
+          const {serviceId,data} = props ?? {};
+
+          return  updateService(serviceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateServiceMutationResult = NonNullable<Awaited<ReturnType<typeof updateService>>>
+    export type UpdateServiceMutationBody = BodyType<ServiceUpdate>
+    export type UpdateServiceMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update a salon service
+ */
+export const useUpdateService = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateService>>, TError,{serviceId: number;data: BodyType<ServiceUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateService>>,
+        TError,
+        {serviceId: number;data: BodyType<ServiceUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateServiceMutationOptions(options));
+    }
 
 export const getListStylistsUrl = () => {
 

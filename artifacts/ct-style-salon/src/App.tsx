@@ -26,6 +26,7 @@ import {
   getListAppointmentsQueryKey,
   getListServicesQueryKey,
   getListStylistsQueryKey,
+  useCreateService,
   useCreateAppointment,
   useGetAvailability,
   useGetSalonSummary,
@@ -33,7 +34,10 @@ import {
   useListAppointments,
   useListServices,
   useListStylists,
+  useUpdateService,
   useUpdateStylistSchedule,
+  type Service,
+  type ServiceInput,
   type Stylist,
   type StylistScheduleEntry,
 } from '@workspace/api-client-react';
@@ -352,6 +356,192 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
   );
 }
 
+type ServiceFormState = {
+  name: string;
+  description: string;
+  category: string;
+  price: string;
+  durationMinutes: string;
+  featured: boolean;
+};
+
+const emptyServiceForm: ServiceFormState = {
+  name: '',
+  description: '',
+  category: '',
+  price: '',
+  durationMinutes: '',
+  featured: false,
+};
+
+function serviceToForm(service: Service): ServiceFormState {
+  return {
+    name: service.name,
+    description: service.description,
+    category: service.category,
+    price: String(service.price),
+    durationMinutes: String(service.durationMinutes),
+    featured: service.featured,
+  };
+}
+
+function ServiceEditor({
+  service,
+  onCancel,
+  onSaved,
+}: {
+  service?: Service;
+  onCancel: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const [form, setForm] = useState<ServiceFormState>(() => service ? serviceToForm(service) : emptyServiceForm);
+  const [feedback, setFeedback] = useState<string>();
+  const createService = useCreateService({
+    request: { headers: { 'x-salon-manager': 'true' } },
+  });
+  const updateService = useUpdateService({
+    request: { headers: { 'x-salon-manager': 'true' } },
+  });
+  const isPending = createService.isPending || updateService.isPending;
+
+  useEffect(() => {
+    setForm(service ? serviceToForm(service) : emptyServiceForm);
+    setFeedback(undefined);
+  }, [service?.id]);
+
+  const updateField = <K extends keyof ServiceFormState>(field: K, value: ServiceFormState[K]) => {
+    setFeedback(undefined);
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const save = (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = form.name.trim();
+    const description = form.description.trim();
+    const category = form.category.trim();
+    const durationMinutes = Number(form.durationMinutes);
+    const price = Number(form.price);
+
+    if (!name || !description || !category || !form.price.trim() || !form.durationMinutes.trim()) {
+      setFeedback('Name, description, category, price, and duration are required.');
+      return;
+    }
+    if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) {
+      setFeedback('Duration must be a positive whole number of minutes.');
+      return;
+    }
+    if (!/^\d+(\.\d{1,2})?$/.test(form.price.trim()) || !Number.isFinite(price) || price < 0) {
+      setFeedback('Enter a valid price with no more than two decimal places.');
+      return;
+    }
+
+    const data: ServiceInput = {
+      name,
+      description,
+      category,
+      durationMinutes,
+      price,
+      featured: form.featured,
+    };
+    const onError = (error: unknown) => {
+      setFeedback(scheduleErrorMessage(error, 'We could not save this service. Check the details and try again.'));
+    };
+    if (service) {
+      updateService.mutate(
+        { serviceId: service.id, data },
+        {
+          onSuccess: () => onSaved(`${service.name} was updated.`),
+          onError,
+        },
+      );
+    } else {
+      createService.mutate(
+        { data },
+        {
+          onSuccess: () => onSaved(`${name} was added to the menu.`),
+          onError,
+        },
+      );
+    }
+  };
+
+  return (
+    <form onSubmit={save} className="mt-6 rounded-2xl border border-[hsl(var(--primary)/.35)] bg-[hsl(var(--card))] p-5 shadow-[0_14px_34px_hsl(var(--secondary)/.06)] sm:p-7" data-testid={service ? `service-editor-${service.id}` : 'service-editor-new'}>
+      <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-5 sm:flex-row sm:items-start">
+        <div>
+          <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{service ? 'Edit service' : 'New service'}</p>
+          <h2 className="mt-2 font-display text-3xl">{service ? service.name : 'Add to the menu'}</h2>
+        </div>
+        <button type="button" onClick={onCancel} className="self-start text-xs font-bold tracking-[.08em] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]" data-testid="button-cancel-service">Cancel</button>
+      </div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <label className="text-xs font-semibold">Name
+          <input required value={form.name} onChange={(event) => updateField('name', event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-4 text-sm font-normal" data-testid="input-service-name" />
+        </label>
+        <label className="text-xs font-semibold">Category
+          <input required value={form.category} onChange={(event) => updateField('category', event.target.value)} placeholder="Hair, Beard, Signature…" className="mt-2 h-12 w-full rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-4 text-sm font-normal" data-testid="input-service-category" />
+        </label>
+        <label className="text-xs font-semibold sm:col-span-2">Description
+          <textarea required value={form.description} onChange={(event) => updateField('description', event.target.value)} className="mt-2 min-h-[96px] w-full resize-y rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] p-4 text-sm font-normal" data-testid="input-service-description" />
+        </label>
+        <label className="text-xs font-semibold">Price
+          <div className="relative mt-2"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[hsl(var(--primary))]">$</span><input required type="text" inputMode="decimal" value={form.price} onChange={(event) => updateField('price', event.target.value)} placeholder="120.00" className="h-12 w-full rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] pl-9 pr-4 text-sm font-normal" data-testid="input-service-price" /></div>
+        </label>
+        <label className="text-xs font-semibold">Duration
+          <div className="relative mt-2"><input required type="number" min="1" step="1" value={form.durationMinutes} onChange={(event) => updateField('durationMinutes', event.target.value)} placeholder="45" className="h-12 w-full rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-4 pr-16 text-sm font-normal" data-testid="input-service-duration" /><span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">minutes</span></div>
+        </label>
+      </div>
+      <label className="mt-5 flex items-center gap-3 text-sm font-semibold">
+        <input type="checkbox" checked={form.featured} onChange={(event) => updateField('featured', event.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" data-testid="checkbox-service-featured" />
+        Show in featured menu
+      </label>
+      <div className="mt-6 flex flex-col-reverse items-stretch justify-between gap-4 border-t border-[hsl(var(--border))] pt-5 sm:flex-row sm:items-center">
+        {feedback ? <p className="text-sm text-[hsl(var(--destructive))]" role="alert" data-testid="status-service-error">{feedback}</p> : <span className="text-[11px] text-[hsl(var(--muted-foreground))]">Duration controls the available booking times.</span>}
+        <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid="button-save-service">
+          {isPending ? 'Saving…' : service ? 'Save changes' : 'Add service'} <Check size={14} />
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ServiceManagement() {
+  const servicesQuery = useListServices({ query: { queryKey: getListServicesQueryKey() } });
+  const services = servicesQuery.data ?? [];
+  const [editing, setEditing] = useState<number | 'new' | null>(null);
+  const [feedback, setFeedback] = useState<string>();
+
+  const finishSave = (message: string) => {
+    setEditing(null);
+    setFeedback(message);
+    queryClient.invalidateQueries({ queryKey: getListServicesQueryKey() });
+  };
+
+  return (
+    <section className="mt-12 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-5 sm:p-7" data-testid="service-management">
+      <div className="flex flex-col justify-between gap-4 border-b border-[hsl(var(--border))] pb-5 sm:flex-row sm:items-end">
+        <div><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">Service menu</p><h2 className="mt-2 font-display text-4xl">The rituals.</h2><p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">Update the details guests see and the time each service needs.</p></div>
+        <button type="button" onClick={() => { setEditing('new'); setFeedback(undefined); }} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--card))] hover:bg-[hsl(var(--secondary)/.88)]" data-testid="button-add-service"><span className="text-lg leading-none">+</span> Add service</button>
+      </div>
+      {feedback && <p className="mt-5 text-sm text-[hsl(var(--secondary))]" role="status" data-testid="status-service-success">{feedback}</p>}
+      {editing === 'new' && <ServiceEditor onCancel={() => setEditing(null)} onSaved={finishSave} />}
+      <div className="mt-6 space-y-3">
+        {servicesQuery.isLoading ? <LoadingCards count={2} /> : servicesQuery.isError ? <ErrorMessage retry={() => servicesQuery.refetch()} /> : services.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-10 text-center text-sm text-[hsl(var(--muted-foreground))]" data-testid="empty-managed-services">No services yet. Add the first ritual to your menu.</div> : services.map((service) => (
+          <div key={service.id} className="flex flex-col gap-5 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:flex-row sm:items-center sm:justify-between" data-testid={`service-manager-card-${service.id}`}>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-3"><h3 className="font-display text-2xl">{service.name}</h3>{service.featured && <span className="rounded-full bg-[hsl(var(--accent)/.45)] px-2 py-1 font-mono-ui text-[9px] uppercase tracking-[.08em]">Featured</span>}</div>
+              <p className="mt-2 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{service.description}</p>
+              <div className="mt-3 flex flex-wrap gap-4 font-mono-ui text-[10px] uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]"><span>{service.category}</span><span>{service.durationMinutes} min</span><span>${service.price.toFixed(2)}</span></div>
+            </div>
+            <button type="button" onClick={() => { setEditing(service.id); setFeedback(undefined); }} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.1em] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-edit-service-${service.id}`}>Edit service <ArrowRight size={14} /></button>
+          </div>
+        ))}
+      </div>
+      {typeof editing === 'number' && services.find((service) => service.id === editing) && <ServiceEditor service={services.find((service) => service.id === editing)} onCancel={() => setEditing(null)} onSaved={finishSave} />}
+    </section>
+  );
+}
+
 function ManagerSchedule() {
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
   const stylists = stylistsQuery.data ?? [];
@@ -360,8 +550,9 @@ function ManagerSchedule() {
       <div className="max-w-2xl reveal">
         <p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">Manager workspace</p>
         <h1 className="mt-4 font-display text-6xl leading-[.84] sm:text-8xl">Keep the<br /><i>chairs ready.</i></h1>
-        <p className="mt-7 max-w-xl text-base leading-7 text-[hsl(var(--muted-foreground))]">Update each employee’s working days and open hours. Changes are used by booking as soon as you save.</p>
+        <p className="mt-7 max-w-xl text-base leading-7 text-[hsl(var(--muted-foreground))]">Keep the service menu current and update each employee’s working days and open hours. Changes are used by booking as soon as you save.</p>
       </div>
+      <ServiceManagement />
       <div className="mt-12 space-y-5">
         {stylistsQuery.isLoading ? <LoadingCards count={3} /> : stylistsQuery.isError ? <ErrorMessage retry={() => stylistsQuery.refetch()} /> : stylists.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No employees are available to schedule.</div> : stylists.map((stylist) => <ScheduleEditor key={stylist.id} stylist={stylist} />)}
       </div>

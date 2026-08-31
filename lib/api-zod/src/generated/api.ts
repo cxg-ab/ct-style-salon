@@ -33,6 +33,72 @@ export const ListServicesResponse = zod.array(ListServicesResponseItem)
 
 
 /**
+ * @summary Create a salon service
+ */
+
+
+
+export const createServiceBodyPriceMin = 0;
+
+
+
+
+export const CreateServiceBody = zod.object({
+  "name": zod.string().min(1),
+  "description": zod.string().min(1),
+  "durationMinutes": zod.int().min(1),
+  "price": zod.number().min(createServiceBodyPriceMin),
+  "category": zod.string().min(1),
+  "featured": zod.boolean()
+})
+
+export const CreateServiceResponse = zod.object({
+  "id": zod.int(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "durationMinutes": zod.int(),
+  "price": zod.number(),
+  "category": zod.string(),
+  "featured": zod.boolean()
+})
+
+
+/**
+ * @summary Update a salon service
+ */
+export const UpdateServiceParams = zod.object({
+  "serviceId": zod.coerce.number().int()
+})
+
+
+
+
+export const updateServiceBodyPriceMin = 0;
+
+
+
+
+export const UpdateServiceBody = zod.object({
+  "name": zod.string().min(1),
+  "description": zod.string().min(1),
+  "durationMinutes": zod.int().min(1),
+  "price": zod.number().min(updateServiceBodyPriceMin),
+  "category": zod.string().min(1),
+  "featured": zod.boolean()
+})
+
+export const UpdateServiceResponse = zod.object({
+  "id": zod.int(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "durationMinutes": zod.int(),
+  "price": zod.number(),
+  "category": zod.string(),
+  "featured": zod.boolean()
+})
+
+
+/**
  * @summary List salon stylists
  */
 export const listStylistsResponseScheduleItemDayOfWeekMin = 0;
