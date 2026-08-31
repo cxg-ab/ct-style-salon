@@ -8,11 +8,13 @@ import {
   db,
   pool,
   servicesTable,
+  stylistsTable,
 } from "@workspace/db";
 import type { StylistScheduleEntry } from "../lib/salon-seed";
 
 const testDate = "2099-09-07";
 const testEmail = "schedule-regression@example.com";
+const lifecycleEmail = "stylist-lifecycle@example.com";
 const serviceTestName = "Automated Service Regression";
 const managerHeaders = { "x-salon-manager": "true" };
 let server: Server;
@@ -22,6 +24,7 @@ let aishaId: number;
 let danielId: number;
 let signatureCutId: number;
 let createdServiceId: number | undefined;
+let createdStylistId: number | undefined;
 let originalSchedules = new Map<number, StylistScheduleEntry[]>();
 let originalStylistNames = new Map<number, string>();
 
@@ -121,6 +124,10 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${address.port}`;
 
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, testEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, lifecycleEmail));
+  if (createdStylistId) {
+    await db.delete(stylistsTable).where(eq(stylistsTable.id, createdStylistId));
+  }
 
   const stylists = await request<
     Array<{ id: number; name: string; schedule: StylistScheduleEntry[] }>
@@ -150,6 +157,7 @@ after(async () => {
     await updateSchedule(stylistId, schedule);
   }
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, testEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, lifecycleEmail));
   if (createdServiceId) {
     await db.delete(servicesTable).where(eq(servicesTable.id, createdServiceId));
   }
@@ -360,6 +368,83 @@ test("manager can delete an unused service and it disappears from the listing", 
   assert.ok(!listed.body.some((service) => service.id === deletedId));
 });
 
+test("manager roster lifecycle persists edits and archives employees with appointments", async () => {
+  const created = await request<{
+    id: number;
+    name: string;
+    role: string;
+    bio: string;
+    initials: string;
+    accent: string;
+    active: boolean;
+    schedule: StylistScheduleEntry[];
+  }>("/api/stylists", {
+    method: "POST",
+    headers: managerHeaders,
+    body: JSON.stringify({
+      name: "Lifecycle Employee",
+      role: "Guest Stylist",
+      bio: "A temporary employee for the roster lifecycle test.",
+      initials: "LE",
+      accent: "#B86B45",
+      schedule: scheduleWithMonday("10:00", "14:00"),
+    }),
+  });
+  assert.equal(created.response.status, 201);
+  assert.equal(created.body.active, true);
+  createdStylistId = created.body.id;
+
+  const updated = await request<{ name: string; schedule: StylistScheduleEntry[] }>(
+    `/api/stylists/${createdStylistId}`,
+    {
+      method: "PATCH",
+      headers: managerHeaders,
+      body: JSON.stringify({
+        name: "Updated Lifecycle Employee",
+        role: "Senior Guest Stylist",
+        bio: "An updated employee profile for the roster lifecycle test.",
+        initials: "ULE",
+        accent: "#6B705C",
+        schedule: scheduleWithMonday("11:00", "15:00"),
+      }),
+    },
+  );
+  assert.equal(updated.response.status, 200);
+  assert.equal(updated.body.name, "Updated Lifecycle Employee");
+  assert.deepEqual(updated.body.schedule, scheduleWithMonday("11:00", "15:00"));
+
+  const appointment = await request<{ stylistName: string }>("/api/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      serviceId: signatureCutId,
+      stylistId: createdStylistId,
+      customerName: "Roster Test Guest",
+      email: "stylist-lifecycle@example.com",
+      phone: "+971500000000",
+      date: testDate,
+      time: "11:00 AM",
+    }),
+  });
+  assert.equal(appointment.response.status, 201);
+
+  const removed = await request<{ active: boolean }>(`/api/stylists/${createdStylistId}`, {
+    method: "DELETE",
+    headers: managerHeaders,
+  });
+  assert.equal(removed.response.status, 200);
+  assert.equal(removed.body.active, false);
+
+  const listed = await request<Array<{ id: number }>>("/api/stylists");
+  assert.equal(listed.response.status, 200);
+  assert.equal(listed.body.some((stylist) => stylist.id === createdStylistId), false);
+
+  const history = await request<Array<{ stylistName: string }>>(
+    "/api/appointments?email=stylist-lifecycle%40example.com",
+  );
+  assert.equal(history.response.status, 200);
+  assert.equal(history.body[0]?.stylistName, "Updated Lifecycle Employee");
+});
+
 test("manager can rename an employee without losing their schedule", async () => {
   const originalSchedule = originalSchedules.get(marcoId);
   const originalName = originalStylistNames.get(marcoId);
@@ -371,9 +456,9 @@ test("manager can rename an employee without losing their schedule", async () =>
   assert.equal(updated.body.name, `${originalName} Updated`);
   assert.deepEqual(updated.body.schedule, originalSchedule);
 
-  const listed = await request<Array<{ id: number; name: string; schedule: StylistScheduleEntry[] }>>(
-    "/api/stylists",
-  );
+  const listed = await request<
+    Array<{ id: number; name: string; schedule: StylistScheduleEntry[] }>
+  >("/api/stylists");
   assert.equal(listed.response.status, 200);
   const listedStylist = listed.body.find((stylist) => stylist.id === marcoId);
   assert.equal(listedStylist?.name, `${originalName} Updated`);

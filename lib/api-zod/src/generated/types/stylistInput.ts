@@ -7,7 +7,7 @@
  */
 import type { StylistScheduleEntry } from './stylistScheduleEntry';
 
-export interface StylistUpdate {
+export interface StylistInput {
   /** @minLength 1 */
   name: string;
   /** @minLength 1 */

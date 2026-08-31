@@ -16,6 +16,7 @@ import {
   Mail,
   MapPin,
   Menu,
+  Pencil,
   Plus,
   Phone,
   Scissors,
@@ -32,22 +33,26 @@ import {
   getListAppointmentsQueryKey,
   getListServicesQueryKey,
   getListStylistsQueryKey,
-  useCreateService,
+  useCreateStylist,
   useCreateAppointment,
-  useDeleteService,
+  useCreateService,
   useGetAvailability,
   useGetSalonSummary,
   useHealthCheck,
   useListAppointments,
   useListServices,
   useListStylists,
+  useDeleteService,
+  useDeleteStylist,
   useUpdateService,
   useUpdateStylist,
   useUpdateStylistSchedule,
   type Service,
   type ServiceInput,
   type Stylist,
+  type StylistInput,
   type StylistScheduleEntry,
+  type StylistUpdate,
 } from '@workspace/api-client-react';
 import storefrontImage from '@assets/WhatsApp_Image_2026-08-31_at_11.57.17_1788163048747.jpeg';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -388,6 +393,54 @@ function validateScheduleInForm(schedule: StylistScheduleEntry[]) {
   return undefined;
 }
 
+function ScheduleFields({
+  schedule,
+  onChange,
+  idPrefix,
+}: {
+  schedule: StylistScheduleEntry[];
+  onChange: (schedule: StylistScheduleEntry[]) => void;
+  idPrefix: string;
+}) {
+  const { t, weekday } = useLocale();
+  const entryForDay = (dayOfWeek: number) => schedule.find((entry) => entry.dayOfWeek === dayOfWeek);
+  const updateEntry = (dayOfWeek: number, field: 'openTime' | 'closeTime', value: string) => {
+    onChange(schedule.map((entry) => entry.dayOfWeek === dayOfWeek ? { ...entry, [field]: value } : entry));
+  };
+  const toggleDay = (dayOfWeek: number, enabled: boolean) => {
+    if (!enabled) {
+      onChange(schedule.filter((entry) => entry.dayOfWeek !== dayOfWeek));
+      return;
+    }
+    onChange([...schedule, { dayOfWeek, openTime: '10:00', closeTime: '18:00' }].sort((left, right) => left.dayOfWeek - right.dayOfWeek));
+  };
+
+  return (
+    <div className="space-y-2">
+      {weekDays.map((day) => {
+        const entry = entryForDay(day.value);
+        return (
+          <div key={day.value} className={`grid items-center gap-3 rounded-xl border p-3 sm:grid-cols-[minmax(140px,1fr)_1fr_1fr] ${entry ? 'border-[hsl(var(--border))] bg-[hsl(var(--background)/.45)]' : 'border-transparent bg-[hsl(var(--muted)/.45)]'}`}>
+            <label className="flex items-center gap-3 text-sm font-semibold">
+              <input type="checkbox" checked={Boolean(entry)} onChange={(event) => toggleDay(day.value, event.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" data-testid={`checkbox-schedule-${idPrefix}-${day.short}`} />
+              <span>{weekday(new Date(Date.UTC(2023, 0, 1 + day.value)), false)}</span>
+            </label>
+            {entry ? (
+              <>
+                <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">{t('open')}
+                  <input type="time" value={entry.openTime} onChange={(event) => updateEntry(day.value, 'openTime', event.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-open-${idPrefix}-${day.short}`} />
+                </label>
+                <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">{t('close')}
+                  <input type="time" value={entry.closeTime} onChange={(event) => updateEntry(day.value, 'closeTime', event.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-close-${idPrefix}-${day.short}`} />
+                </label>
+              </>
+            ) : <span className="font-mono-ui text-[10px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))] sm:col-span-2">{t('dayOff')}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 function ScheduleEditor({ stylist }: { stylist: Stylist }) {
   const { t, weekday, stylistCopy } = useLocale();
   const displayedStylist = stylistCopy(stylist);
@@ -480,7 +533,17 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
       return;
     }
     updateStylist.mutate(
-      { stylistId: stylist.id, data: { name: nextName } },
+      {
+        stylistId: stylist.id,
+        data: {
+          name: nextName,
+          role: stylist.role,
+          bio: stylist.bio,
+          initials: stylist.initials,
+          accent: stylist.accent,
+          schedule: stylist.schedule,
+        },
+      },
       {
         onSuccess: (updatedStylist) => {
           setName(updatedStylist.name);
@@ -574,6 +637,14 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
   );
 }
 
+type EmployeeFormState = {
+  name: string;
+  role: string;
+  bio: string;
+  initials: string;
+  accent: string;
+  schedule: StylistScheduleEntry[];
+};
 type ServiceFormState = {
   name: string;
   description: string;
@@ -787,22 +858,79 @@ function ManagerSchedule() {
   const { t } = useLocale();
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
   const stylists = stylistsQuery.data ?? [];
+  const [editing, setEditing] = useState<number | 'new' | null>(null);
+  const [feedback, setFeedback] = useState<string>();
+  const deleteStylist = useDeleteStylist();
   const { signOut } = useClerk();
+
+  const finishSave = (message: string) => {
+    setEditing(null);
+    setFeedback(message);
+    queryClient.invalidateQueries({ queryKey: getListStylistsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetAvailabilityQueryKey() });
+  };
+
+  const removeEmployee = (stylist: Stylist) => {
+    if (!window.confirm(`${t('removeEmployeeConfirm')} ${stylist.name}?`)) {
+      return;
+    }
+    setFeedback(undefined);
+    deleteStylist.mutate(
+      { stylistId: stylist.id },
+      {
+        onSuccess: () => {
+          setFeedback(`${stylist.name} ${t('employeeRemoved')}`);
+          queryClient.invalidateQueries({ queryKey: getListStylistsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetAvailabilityQueryKey() });
+        },
+        onError: (error) => {
+          setFeedback(scheduleErrorMessage(error, t('employeeRemoveError'), { openingBeforeClosing: t('openingBeforeClosing'), scheduleOverlap: t('scheduleOverlap') }));
+        },
+      },
+    );
+  };
+
   return (
-    <main className="mx-auto max-w-[1080px] px-5 py-10 sm:px-8 md:py-16">
+    <main className="mx-auto max-w-[1000px] px-5 py-14 sm:px-8 md:py-24">
       <div className="flex flex-col justify-between gap-8 sm:flex-row sm:items-start">
         <div className="max-w-2xl reveal">
            <p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('managerWorkspace')}</p>
-           <h1 className="mt-3 font-display text-5xl leading-[.86] sm:text-6xl">{t('managerWorkspaceShort')} <i>{t('goodHands')}</i></h1>
-           <p className="mt-4 max-w-xl text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')} {t('scheduleIntro')}</p>
+           <h1 className="mt-4 font-display text-6xl leading-[.84] sm:text-8xl">{t('managerWorkspaceShort')}<br /><i>{t('goodHands')}</i></h1>
+           <p className="mt-7 max-w-xl text-base leading-7 text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')} {t('scheduleIntro')}</p>
         </div>
         <button type="button" onClick={() => signOut({ redirectUrl: basePath || '/' })} className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid="button-manager-sign-out">
            {t('signOut')}
         </button>
       </div>
       <ServiceManagement />
-       <div className="mt-8 space-y-3">
-         {stylistsQuery.isLoading ? <LoadingCards count={3} /> : stylistsQuery.isError ? <ErrorMessage retry={() => stylistsQuery.refetch()} /> : stylists.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-12 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noEmployees')}</div> : stylists.map((stylist) => <ScheduleEditor key={stylist.id} stylist={stylist} />)}
+      <section className="mt-12 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-5 sm:p-7" data-testid="employee-management">
+        <div className="flex flex-col justify-between gap-4 border-b border-[hsl(var(--border))] pb-5 sm:flex-row sm:items-end">
+          <div><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('employeeRoster')}</p><h2 className="mt-2 font-display text-4xl">{t('theTeam')}</h2><p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{t('employeeIntro')}</p></div>
+          <button type="button" onClick={() => { setEditing('new'); setFeedback(undefined); }} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--card))] hover:bg-[hsl(var(--secondary)/.88)]" data-testid="button-add-employee"><Plus size={15} /> {t('addEmployee')}</button>
+        </div>
+        {feedback && <p className="mt-5 text-sm text-[hsl(var(--secondary))]" role="status" data-testid="status-employee-success">{feedback}</p>}
+        {editing === 'new' && <EmployeeProfileEditor onCancel={() => setEditing(null)} onSaved={finishSave} />}
+        <div className="mt-6 space-y-5">
+          {stylistsQuery.isLoading ? <LoadingCards count={3} /> : stylistsQuery.isError ? <ErrorMessage retry={() => stylistsQuery.refetch()} /> : stylists.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-12 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noEmployees')}</div> : null}
+          {stylists.map((stylist) => (
+            <div key={`profile-${stylist.id}`} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7" data-testid={`employee-card-${stylist.id}`}>
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                <div className="flex min-w-0 items-start gap-4">
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-bold" style={{ backgroundColor: `${stylist.accent}25`, color: stylist.accent }}>{stylist.initials}</span>
+                  <div><h3 className="font-display text-3xl">{stylist.name}</h3><p className="mt-1 font-mono-ui text-[10px] uppercase tracking-[.14em] text-[hsl(var(--primary))]">{stylist.role}</p><p className="mt-3 max-w-xl text-sm leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p></div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button type="button" onClick={() => { setEditing(stylist.id); setFeedback(undefined); }} className="inline-flex items-center justify-center gap-2 rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.1em] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-edit-employee-${stylist.id}`}><Pencil size={14} /> {t('editEmployee')}</button>
+                  <button type="button" onClick={() => removeEmployee(stylist)} disabled={deleteStylist.isPending} className="inline-flex items-center justify-center gap-2 rounded-full border border-[hsl(var(--destructive)/.35)] px-4 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.06)] disabled:opacity-60" data-testid={`button-remove-employee-${stylist.id}`}><Trash2 size={14} /> {t('removeEmployee')}</button>
+                </div>
+              </div>
+              {editing === stylist.id && <EmployeeProfileEditor stylist={stylist} onCancel={() => setEditing(null)} onSaved={finishSave} />}
+            </div>
+          ))}
+        </div>
+      </section>
+      <div className="mt-6 space-y-5">
+         {stylistsQuery.isLoading ? null : stylistsQuery.isError ? null : stylists.length === 0 ? null : stylists.map((stylist) => <ScheduleEditor key={`schedule-${stylist.id}`} stylist={stylist} />)}
       </div>
     </main>
   );
@@ -995,3 +1123,136 @@ function App() {
 }
 
 export default App;
+
+const defaultEmployeeSchedule: StylistScheduleEntry[] = [
+  { dayOfWeek: 1, openTime: '10:00', closeTime: '18:00' },
+  { dayOfWeek: 2, openTime: '10:00', closeTime: '18:00' },
+  { dayOfWeek: 3, openTime: '10:00', closeTime: '18:00' },
+  { dayOfWeek: 4, openTime: '10:00', closeTime: '18:00' },
+  { dayOfWeek: 5, openTime: '10:00', closeTime: '18:00' },
+];
+
+const emptyEmployeeForm: EmployeeFormState = {
+  name: '',
+  role: '',
+  bio: '',
+  initials: '',
+  accent: '#B86B45',
+  schedule: defaultEmployeeSchedule,
+};
+
+function employeeToForm(stylist: Stylist): EmployeeFormState {
+  return {
+    name: stylist.name,
+    role: stylist.role,
+    bio: stylist.bio,
+    initials: stylist.initials,
+    accent: stylist.accent,
+    schedule: stylist.schedule,
+  };
+}
+
+function EmployeeProfileEditor({
+  stylist,
+  onCancel,
+  onSaved,
+}: {
+  stylist?: Stylist;
+  onCancel: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const { t } = useLocale();
+  const [form, setForm] = useState<EmployeeFormState>(() => stylist ? employeeToForm(stylist) : emptyEmployeeForm);
+  const [feedback, setFeedback] = useState<string>();
+  const createStylist = useCreateStylist();
+  const updateStylist = useUpdateStylist();
+  const isPending = createStylist.isPending || updateStylist.isPending;
+
+  useEffect(() => {
+    setForm(stylist ? employeeToForm(stylist) : emptyEmployeeForm);
+    setFeedback(undefined);
+  }, [stylist?.id]);
+
+  const updateField = <K extends keyof EmployeeFormState>(field: K, value: EmployeeFormState[K]) => {
+    setFeedback(undefined);
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const save = (event: React.FormEvent) => {
+    event.preventDefault();
+    const data = {
+      name: form.name.trim(),
+      role: form.role.trim(),
+      bio: form.bio.trim(),
+      initials: form.initials.trim().toUpperCase(),
+      accent: form.accent.trim(),
+      schedule: form.schedule,
+    };
+    if (!data.name || !data.role || !data.bio || !data.initials || !data.accent) {
+      setFeedback(t('employeeRequired'));
+      return;
+    }
+    if (data.initials.length > 5) {
+      setFeedback(t('initialsTooLong'));
+      return;
+    }
+    const scheduleError = validateScheduleInForm(data.schedule);
+    if (scheduleError) {
+      setFeedback(scheduleError === 'Each opening time must be earlier than its closing time.' ? t('openingBeforeClosing') : t('scheduleOverlap'));
+      return;
+    }
+    const onError = (error: unknown) => {
+      setFeedback(scheduleErrorMessage(error, t('employeeSaveError'), { openingBeforeClosing: t('openingBeforeClosing'), scheduleOverlap: t('scheduleOverlap') }));
+    };
+    if (stylist) {
+      updateStylist.mutate(
+        { stylistId: stylist.id, data: data as StylistUpdate },
+        { onSuccess: () => onSaved(`${data.name} ${t('employeeUpdated')}`), onError },
+      );
+    } else {
+      createStylist.mutate(
+        { data: data as StylistInput },
+        { onSuccess: () => onSaved(`${data.name} ${t('employeeAdded')}`), onError },
+      );
+    }
+  };
+
+  return (
+    <form onSubmit={save} className="mt-6 rounded-2xl border border-[hsl(var(--primary)/.35)] bg-[hsl(var(--card))] p-5 shadow-[0_14px_34px_hsl(var(--secondary)/.06)] sm:p-7" data-testid={stylist ? `employee-editor-${stylist.id}` : 'employee-editor-new'}>
+      <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-5 sm:flex-row sm:items-start">
+        <div>
+          <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{stylist ? t('editEmployee') : t('newEmployee')}</p>
+          <h2 className="mt-2 font-display text-3xl">{stylist ? stylist.name : t('addEmployee')}</h2>
+        </div>
+        <button type="button" onClick={onCancel} className="self-start text-xs font-bold tracking-[.08em] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]" data-testid="button-cancel-employee">{t('cancel')}</button>
+      </div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <label className="text-xs font-semibold">{t('name')}
+          <input required value={form.name} onChange={(event) => updateField('name', event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-employee-name" />
+        </label>
+        <label className="text-xs font-semibold">{t('jobTitle')}
+          <input required value={form.role} onChange={(event) => updateField('role', event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-employee-role" />
+        </label>
+        <label className="text-xs font-semibold">{t('initials')}
+          <input required maxLength={5} value={form.initials} onChange={(event) => updateField('initials', event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal uppercase" data-testid="input-employee-initials" />
+        </label>
+        <label className="text-xs font-semibold">{t('accent')}
+          <input required value={form.accent} onChange={(event) => updateField('accent', event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-employee-accent" />
+        </label>
+        <label className="text-xs font-semibold sm:col-span-2">{t('description')}
+          <textarea required value={form.bio} onChange={(event) => updateField('bio', event.target.value)} rows={3} className="mt-2 w-full resize-y rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 py-3 text-sm font-normal" data-testid="input-employee-bio" />
+        </label>
+      </div>
+      <div className="mt-7">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div><p className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-[hsl(var(--primary))]">{t('workingSchedule')}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('scheduleIntro')}</p></div>
+        </div>
+        <ScheduleFields schedule={form.schedule} onChange={(schedule) => updateField('schedule', schedule)} idPrefix={stylist ? String(stylist.id) : 'new'} />
+      </div>
+      {feedback && <p className="mt-4 text-sm text-[hsl(var(--destructive))]" role="alert" data-testid="status-employee-error">{feedback}</p>}
+      <button type="submit" disabled={isPending} className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid="button-save-employee">
+        {isPending ? t('saving') : t('saveEmployee')} <Check size={14} />
+      </button>
+    </form>
+  );
+}

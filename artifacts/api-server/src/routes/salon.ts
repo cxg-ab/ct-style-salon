@@ -6,6 +6,10 @@ import {
   CreateAppointmentResponse,
   CreateServiceBody,
   CreateServiceResponse,
+  CreateStylistBody,
+  CreateStylistResponse,
+  DeleteStylistParams,
+  DeleteStylistResponse,
   GetAvailabilityQueryParams,
   GetAvailabilityResponse,
   GetSalonSummaryResponse,
@@ -31,9 +35,6 @@ import {
 } from "@workspace/db";
 import {
   ensureSalonSeeded,
-  getStylistSchedule,
-  renameStylistSchedule,
-  setStylistSchedule,
   type StylistScheduleEntry,
 } from "../lib/salon-seed";
 
@@ -223,6 +224,36 @@ function appointmentResponse(
   };
 }
 
+function stylistResponse(row: typeof stylistsTable.$inferSelect) {
+  return {
+    ...row,
+    schedule: row.schedule ?? [],
+  };
+}
+
+function validateStylistPayload(payload: {
+  name: string;
+  role: string;
+  bio: string;
+  initials: string;
+  accent: string;
+  schedule: StylistScheduleEntry[];
+}): string | undefined {
+  if (
+    !payload.name.trim() ||
+    !payload.role.trim() ||
+    !payload.bio.trim() ||
+    !payload.initials.trim() ||
+    !payload.accent.trim()
+  ) {
+    return "Name, job title, description, initials, and accent are required.";
+  }
+  if (payload.initials.trim().length > 5) {
+    return "Initials must be five characters or fewer.";
+  }
+  return validateSchedule(payload.schedule);
+}
+
 router.get("/services", async (_req, res): Promise<void> => {
   await ensureSalonSeeded();
   const rows = await db.select().from(servicesTable).orderBy(servicesTable.id);
@@ -384,12 +415,47 @@ router.delete("/services/:serviceId", async (req, res): Promise<void> => {
 
 router.get("/stylists", async (_req, res): Promise<void> => {
   await ensureSalonSeeded();
-  const rows = await db.select().from(stylistsTable).orderBy(stylistsTable.id);
+  const rows = await db
+    .select()
+    .from(stylistsTable)
+    .where(eq(stylistsTable.active, true))
+    .orderBy(stylistsTable.id);
   res.json(
-    ListStylistsResponse.parse(
-      rows.map((row) => ({ ...row, schedule: getStylistSchedule(row.name) })),
-    ),
+    ListStylistsResponse.parse(rows.map(stylistResponse)),
   );
+});
+
+router.post("/stylists", async (req, res): Promise<void> => {
+  if (!requireSalonManager(req, res)) {
+    return;
+  }
+
+  await ensureSalonSeeded();
+  const body = CreateStylistBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Enter complete employee details and a valid schedule." });
+    return;
+  }
+  const validationError = validateStylistPayload(body.data);
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
+
+  const [created] = await db
+    .insert(stylistsTable)
+    .values({
+      name: body.data.name.trim(),
+      role: body.data.role.trim(),
+      bio: body.data.bio.trim(),
+      initials: body.data.initials.trim().toUpperCase(),
+      accent: body.data.accent.trim(),
+      schedule: body.data.schedule,
+      active: true,
+    })
+    .returning();
+
+  res.status(201).json(CreateStylistResponse.parse(stylistResponse(created)));
 });
 
 router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
@@ -404,44 +470,95 @@ router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
     return;
   }
   const body = UpdateStylistBody.safeParse(req.body);
-  if (!body.success || !body.data.name.trim()) {
-    res.status(400).json({ error: "Enter a valid employee name." });
+  if (!body.success) {
+    const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+    if (!name) {
+      res.status(400).json({ error: "Enter complete employee details and a valid schedule." });
+      return;
+    }
+
+    const [stylist] = await db
+      .select({ id: stylistsTable.id })
+      .from(stylistsTable)
+      .where(
+        and(
+          eq(stylistsTable.id, params.data.stylistId),
+          eq(stylistsTable.active, true),
+        ),
+      )
+      .limit(1);
+    if (!stylist) {
+      res.status(404).json({ error: "Employee not found." });
+      return;
+    }
+
+    const [duplicate] = await db
+      .select({ id: stylistsTable.id })
+      .from(stylistsTable)
+      .where(and(eq(stylistsTable.name, name), ne(stylistsTable.id, stylist.id)))
+      .limit(1);
+    if (duplicate) {
+      res.status(400).json({ error: "An employee with that name already exists." });
+      return;
+    }
+
+    const [renamed] = await db
+      .update(stylistsTable)
+      .set({ name })
+      .where(eq(stylistsTable.id, stylist.id))
+      .returning();
+    res.json(UpdateStylistResponse.parse(stylistResponse(renamed)));
     return;
   }
-
-  const [stylist] = await db
-    .select()
-    .from(stylistsTable)
-    .where(eq(stylistsTable.id, params.data.stylistId))
-    .limit(1);
-  if (!stylist) {
-    res.status(404).json({ error: "Employee not found." });
-    return;
-  }
-
-  const name = body.data.name.trim();
-  const [duplicate] = await db
-    .select({ id: stylistsTable.id })
-    .from(stylistsTable)
-    .where(and(eq(stylistsTable.name, name), ne(stylistsTable.id, stylist.id)))
-    .limit(1);
-  if (duplicate) {
-    res.status(400).json({ error: "An employee with that name already exists." });
+  const validationError = validateStylistPayload(body.data);
+  if (validationError) {
+    res.status(400).json({ error: validationError });
     return;
   }
 
   const [updated] = await db
     .update(stylistsTable)
-    .set({ name })
-    .where(eq(stylistsTable.id, stylist.id))
+    .set({
+      name: body.data.name.trim(),
+      role: body.data.role.trim(),
+      bio: body.data.bio.trim(),
+      initials: body.data.initials.trim().toUpperCase(),
+      accent: body.data.accent.trim(),
+      schedule: body.data.schedule,
+    })
+    .where(and(eq(stylistsTable.id, params.data.stylistId), eq(stylistsTable.active, true)))
     .returning();
   if (!updated) {
     res.status(404).json({ error: "Employee not found." });
     return;
   }
 
-  const schedule = renameStylistSchedule(stylist.name, updated.name);
-  res.json(UpdateStylistResponse.parse({ ...updated, schedule }));
+  res.json(UpdateStylistResponse.parse(stylistResponse(updated)));
+});
+
+router.delete("/stylists/:stylistId", async (req, res): Promise<void> => {
+  if (!requireSalonManager(req, res)) {
+    return;
+  }
+
+  await ensureSalonSeeded();
+  const params = DeleteStylistParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Choose a valid employee." });
+    return;
+  }
+
+  const [updated] = await db
+    .update(stylistsTable)
+    .set({ active: false })
+    .where(and(eq(stylistsTable.id, params.data.stylistId), eq(stylistsTable.active, true)))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "Employee not found." });
+    return;
+  }
+
+  res.json(DeleteStylistResponse.parse(stylistResponse(updated)));
 });
 
 router.patch("/stylists/:stylistId/schedule", async (req, res): Promise<void> => {
@@ -476,8 +593,12 @@ router.patch("/stylists/:stylistId/schedule", async (req, res): Promise<void> =>
     return;
   }
 
-  const schedule = setStylistSchedule(stylist.name, body.data.schedule);
-  res.json(UpdateStylistScheduleResponse.parse({ ...stylist, schedule }));
+  const [updated] = await db
+    .update(stylistsTable)
+    .set({ schedule: body.data.schedule })
+    .where(eq(stylistsTable.id, params.data.stylistId))
+    .returning();
+  res.json(UpdateStylistScheduleResponse.parse(stylistResponse(updated)));
 });
 
 router.get("/availability", async (req, res): Promise<void> => {
@@ -494,9 +615,14 @@ router.get("/availability", async (req, res): Promise<void> => {
 
   const date = String(req.query.date);
   const stylistRows = await db
-    .select({ id: stylistsTable.id, name: stylistsTable.name })
+    .select({ id: stylistsTable.id, name: stylistsTable.name, schedule: stylistsTable.schedule })
     .from(stylistsTable)
-    .where(eq(stylistsTable.id, parsed.data.stylistId))
+    .where(
+      and(
+        eq(stylistsTable.id, parsed.data.stylistId),
+        eq(stylistsTable.active, true),
+      ),
+    )
     .limit(1);
   const stylist = stylistRows[0];
   if (!stylist) {
@@ -534,7 +660,7 @@ router.get("/availability", async (req, res): Promise<void> => {
     bookedByStylist.set(appointment.stylistId, appointments);
   }
 
-  const schedule = getStylistSchedule(stylist.name);
+  const schedule = stylist.schedule ?? [];
   const weekday = parsed.data.date.getUTCDay();
   const output = [{
     stylistId: stylist.id,
@@ -608,14 +734,19 @@ router.post("/appointments", async (req, res): Promise<void> => {
     const stylist = await tx
       .select()
       .from(stylistsTable)
-      .where(eq(stylistsTable.id, body.data.stylistId))
+      .where(
+        and(
+          eq(stylistsTable.id, body.data.stylistId),
+          eq(stylistsTable.active, true),
+        ),
+      )
       .limit(1);
     if (!service[0] || !stylist[0]) {
       res.status(400).json({ error: "That service or stylist is no longer available." });
       return;
     }
 
-    const schedule = getStylistSchedule(stylist[0].name);
+    const schedule = (stylist[0].schedule ?? []) as StylistScheduleEntry[];
     const weekday = body.data.date.getUTCDay();
     if (!slotsForSchedule(schedule, weekday, service[0].durationMinutes).includes(body.data.time)) {
       const breakConflict = schedule

@@ -14,5 +14,6 @@ export interface Stylist {
   bio: string;
   initials: string;
   accent: string;
+  active: boolean;
   schedule: StylistScheduleEntry[];
 }

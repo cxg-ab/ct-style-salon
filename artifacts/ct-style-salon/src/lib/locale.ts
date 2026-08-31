@@ -18,6 +18,11 @@ type MessageKey =
    | 'breaks' | 'addBreak' | 'removeBreak' | 'breakStart' | 'breakEnd' | 'noBreaks'
    | 'breakBeforeEnd' | 'breakOutsideHours' | 'breakOverlap'
   | 'open' | 'close' | 'dayOff' | 'scheduleIntro' | 'noEmployees' | 'signOut'
+  | 'employeeRoster' | 'theTeam' | 'employeeIntro' | 'addEmployee' | 'newEmployee' | 'editEmployee'
+  | 'removeEmployee' | 'removeEmployeeConfirm' | 'employeeRequired' | 'initialsTooLong'
+  | 'workingSchedule' | 'saveEmployee' | 'employeeSaveError' | 'employeeAdded'
+  | 'employeeUpdated' | 'employeeRemoved' | 'employeeRemoveError' | 'jobTitle' | 'initials'
+  | 'accent'
   | 'reserveYourChair' | 'goodHourStarts' | 'bookingIntro' | 'employee' | 'service'
   | 'dateTime' | 'details' | 'choosePerson' | 'whoSee' | 'teamOnWay' | 'chooseService'
   | 'whatDoing' | 'menuRefreshing' | 'mostLoved' | 'findTime' | 'whenFeelsRight'
@@ -70,6 +75,17 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
      breakOutsideHours: 'Breaks must fall within working hours.', breakOverlap: 'Breaks cannot overlap on the same day.',
      dayOff: 'Day off', scheduleIntro: 'Booking times are offered every 90 minutes. Services that overlap a recurring break or closing time are blocked.',
     noEmployees: 'No employees are available to schedule.', signOut: 'Sign out',
+    employeeRoster: 'Employee roster', theTeam: 'The team',
+    employeeIntro: 'Keep your people list, profiles, and working hours up to date.',
+    addEmployee: 'Add employee', newEmployee: 'New employee', editEmployee: 'Edit employee', removeEmployee: 'Remove employee',
+    removeEmployeeConfirm: 'Remove this employee from booking and the active roster?',
+    employeeRequired: 'Name, job title, description, initials, and accent are required.',
+    initialsTooLong: 'Initials must be five characters or fewer.',
+    workingSchedule: 'Working schedule', saveEmployee: 'Save employee',
+    employeeSaveError: 'We could not save this employee. Check the details and try again.',
+    employeeAdded: 'has been added.', employeeUpdated: 'has been updated.',
+    employeeRemoved: 'has been removed from booking.', employeeRemoveError: 'We could not remove this employee. Please try again.',
+    jobTitle: 'Job title', initials: 'Initials', accent: 'Accent',
     reserveYourChair: 'Reserve your chair', goodHourStarts: 'A good hour starts here.',
     bookingIntro: 'Choose your person, then your ritual. We will show times that fit their schedule.',
     employee: 'Employee', service: 'Service', dateTime: 'Date & time', details: 'Details',
@@ -149,6 +165,17 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
      breakOutsideHours: 'يجب أن تقع الاستراحات ضمن ساعات العمل.', breakOverlap: 'لا يمكن تداخل الاستراحات في اليوم نفسه.',
      dayOff: 'إجازة', scheduleIntro: 'تتوفر أوقات الحجز كل 90 دقيقة. تُحجب الخدمات التي تتداخل مع استراحة متكررة أو وقت الإغلاق.',
     noEmployees: 'لا يوجد موظفون متاحون للجدولة.', signOut: 'تسجيل الخروج',
+    employeeRoster: 'قائمة الموظفين', theTeam: 'الفريق',
+    employeeIntro: 'حافظ على قائمة فريقك وملفاتهم وساعات عملهم محدثة.',
+    addEmployee: 'إضافة موظف', newEmployee: 'موظف جديد', editEmployee: 'تعديل الموظف', removeEmployee: 'إزالة الموظف',
+    removeEmployeeConfirm: 'إزالة هذا الموظف من الحجوزات والقائمة النشطة؟',
+    employeeRequired: 'الاسم والمسمى والوصف والأحرف الأولى واللون مطلوبة.',
+    initialsTooLong: 'يجب ألا تتجاوز الأحرف الأولى خمسة أحرف.',
+    workingSchedule: 'جدول العمل', saveEmployee: 'حفظ الموظف',
+    employeeSaveError: 'تعذر حفظ الموظف. تحقق من البيانات وحاول مرة أخرى.',
+    employeeAdded: 'تمت إضافته.', employeeUpdated: 'تم تحديثه.',
+    employeeRemoved: 'تمت إزالته من الحجوزات.', employeeRemoveError: 'تعذر إزالة الموظف. حاول مرة أخرى.',
+    jobTitle: 'المسمى الوظيفي', initials: 'الأحرف الأولى', accent: 'اللون',
     reserveYourChair: 'احجز مقعدك', goodHourStarts: 'ساعة جميلة تبدأ من هنا.',
     bookingIntro: 'اختر الشخص ثم طقسك المفضل. سنعرض الأوقات التي تناسب جدوله.',
     employee: 'الموظف', service: 'الخدمة', dateTime: 'التاريخ والوقت', details: 'التفاصيل',

@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { db, servicesTable, stylistsTable } from "@workspace/db";
 
 const seedServices = [
@@ -42,6 +43,15 @@ const seedStylists = [
     bio: "Known for clean lines, modern texture, and a calm chair-side ritual.",
     initials: "MC",
     accent: "copper",
+    schedule: [
+      { dayOfWeek: 1, openTime: "10:00", closeTime: "20:30" },
+      { dayOfWeek: 2, openTime: "10:00", closeTime: "20:30" },
+      { dayOfWeek: 3, openTime: "10:00", closeTime: "20:30" },
+      { dayOfWeek: 4, openTime: "10:00", closeTime: "20:30" },
+      { dayOfWeek: 5, openTime: "10:00", closeTime: "20:30" },
+      { dayOfWeek: 6, openTime: "10:00", closeTime: "20:30" },
+    ],
+    active: true,
   },
   {
     name: "Aisha",
@@ -49,6 +59,15 @@ const seedStylists = [
     bio: "Creates effortless shape with a soft spot for expressive finishes.",
     initials: "AK",
     accent: "olive",
+    schedule: [
+      { dayOfWeek: 0, openTime: "11:00", closeTime: "21:30" },
+      { dayOfWeek: 1, openTime: "11:00", closeTime: "21:30" },
+      { dayOfWeek: 2, openTime: "11:00", closeTime: "21:30" },
+      { dayOfWeek: 3, openTime: "11:00", closeTime: "21:30" },
+      { dayOfWeek: 5, openTime: "11:00", closeTime: "21:30" },
+      { dayOfWeek: 6, openTime: "11:00", closeTime: "21:30" },
+    ],
+    active: true,
   },
   {
     name: "Daniel",
@@ -56,6 +75,14 @@ const seedStylists = [
     bio: "A detail obsessive who makes classic grooming feel distinctly yours.",
     initials: "DS",
     accent: "ink",
+    schedule: [
+      { dayOfWeek: 1, openTime: "09:30", closeTime: "20:00" },
+      { dayOfWeek: 2, openTime: "09:30", closeTime: "20:00" },
+      { dayOfWeek: 3, openTime: "09:30", closeTime: "20:00" },
+      { dayOfWeek: 4, openTime: "09:30", closeTime: "20:00" },
+      { dayOfWeek: 5, openTime: "09:30", closeTime: "20:00" },
+    ],
+    active: true,
   },
 ];
 
@@ -107,7 +134,7 @@ const defaultStylistSchedules: Record<string, StylistScheduleEntry[]> = {
 const stylistSchedules = new Map(
   Object.entries(defaultStylistSchedules).map(([name, schedule]) => [
     name,
-    schedule.map((entry) => ({ ...entry })),
+    copySchedule(schedule),
   ]),
 );
 
@@ -143,11 +170,22 @@ export async function ensureSalonSeeded(): Promise<void> {
     await db.insert(servicesTable).values(seedServices);
   }
 
-  const [stylist] = await db
-    .select({ id: stylistsTable.id })
+  const existingStylists = await db
+    .select({ id: stylistsTable.id, name: stylistsTable.name, schedule: stylistsTable.schedule })
     .from(stylistsTable)
-    .limit(1);
-  if (!stylist) {
+    .orderBy(stylistsTable.id);
+  if (existingStylists.length === 0) {
     await db.insert(stylistsTable).values(seedStylists);
+    return;
+  }
+
+  for (const stylist of existingStylists) {
+    const defaultSchedule = defaultStylistSchedules[stylist.name];
+    if (defaultSchedule && stylist.schedule.length === 0) {
+      await db
+        .update(stylistsTable)
+        .set({ schedule: defaultSchedule })
+        .where(eq(stylistsTable.id, stylist.id));
+    }
   }
 }

@@ -2,6 +2,7 @@ import { createInsertSchema } from "drizzle-zod";
 import {
   boolean,
   integer,
+  jsonb,
   numeric,
   pgTable,
   serial,
@@ -27,6 +28,18 @@ export const stylistsTable = pgTable("salon_stylists", {
   bio: text("bio").notNull(),
   initials: text("initials").notNull(),
   accent: text("accent").notNull(),
+  schedule: jsonb("schedule")
+    .$type<
+      Array<{
+        dayOfWeek: number;
+        openTime: string;
+        closeTime: string;
+        breaks?: Array<{ startTime: string; endTime: string }>;
+      }>
+    >()
+    .notNull()
+    .default([]),
+  active: boolean("active").notNull().default(true),
 });
 
 export const appointmentsTable = pgTable("salon_appointments", {

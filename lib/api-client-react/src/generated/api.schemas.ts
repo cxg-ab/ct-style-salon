@@ -75,15 +75,44 @@ export interface Stylist {
   bio: string;
   initials: string;
   accent: string;
+  active: boolean;
+  schedule: StylistScheduleEntry[];
+}
+
+export interface StylistInput {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  role: string;
+  /** @minLength 1 */
+  bio: string;
+  /**
+     * @minLength 1
+     * @maxLength 5
+     */
+  initials: string;
+  /** @minLength 1 */
+  accent: string;
+  /** @maxItems 21 */
   schedule: StylistScheduleEntry[];
 }
 
 export interface StylistUpdate {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  role: string;
+  /** @minLength 1 */
+  bio: string;
   /**
      * @minLength 1
-     * @maxLength 80
+     * @maxLength 5
      */
-  name: string;
+  initials: string;
+  /** @minLength 1 */
+  accent: string;
+  /** @maxItems 21 */
+  schedule: StylistScheduleEntry[];
 }
 
 export interface StylistScheduleUpdate {
@@ -149,4 +178,3 @@ serviceId: number;
 export type ListAppointmentsParams = {
 email: string;
 };
-

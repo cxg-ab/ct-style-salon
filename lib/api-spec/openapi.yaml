@@ -168,6 +168,119 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Stylist"
+    post:
+      operationId: createStylist
+      tags: [salon]
+      summary: Add an employee
+      security:
+        - SalonManager: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StylistInput"
+      responses:
+        "201":
+          description: Created employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stylist"
+        "400":
+          description: Invalid employee details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Manager access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /stylists/{stylistId}:
+    patch:
+      operationId: updateStylist
+      tags: [salon]
+      summary: Update an employee profile and schedule
+      security:
+        - SalonManager: []
+      parameters:
+        - name: stylistId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StylistUpdate"
+      responses:
+        "200":
+          description: Updated employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stylist"
+        "400":
+          description: Invalid employee details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Manager access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Employee not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteStylist
+      tags: [salon]
+      summary: Remove an employee safely
+      description: Archives the employee so existing appointments keep their history and the employee is no longer bookable.
+      security:
+        - SalonManager: []
+      parameters:
+        - name: stylistId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Archived employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stylist"
+        "400":
+          description: Invalid employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Manager access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Employee not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /stylists/{stylistId}/schedule:
     patch:
       operationId: updateStylistSchedule
@@ -196,50 +309,6 @@ paths:
                 $ref: "#/components/schemas/Stylist"
         "400":
           description: Invalid or overlapping schedule
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Manager access required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Employee not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /stylists/{stylistId}:
-    patch:
-      operationId: updateStylist
-      tags: [salon]
-      summary: Update an employee's name
-      security:
-        - SalonManager: []
-      parameters:
-        - name: stylistId
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/StylistUpdate"
-      responses:
-        "200":
-          description: Updated employee
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Stylist"
-        "400":
-          description: Invalid employee name
           content:
             application/json:
               schema:
@@ -452,12 +521,46 @@ components:
           type: string
         accent:
           type: string
+        active:
+          type: boolean
         schedule:
           type: array
           items:
             $ref: "#/components/schemas/StylistScheduleEntry"
       required:
         - id
+        - name
+        - role
+        - bio
+        - initials
+        - accent
+        - active
+        - schedule
+    StylistInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        role:
+          type: string
+          minLength: 1
+        bio:
+          type: string
+          minLength: 1
+        initials:
+          type: string
+          minLength: 1
+          maxLength: 5
+        accent:
+          type: string
+          minLength: 1
+        schedule:
+          type: array
+          maxItems: 21
+          items:
+            $ref: "#/components/schemas/StylistScheduleEntry"
+      required:
         - name
         - role
         - bio
@@ -470,9 +573,31 @@ components:
         name:
           type: string
           minLength: 1
-          maxLength: 80
+        role:
+          type: string
+          minLength: 1
+        bio:
+          type: string
+          minLength: 1
+        initials:
+          type: string
+          minLength: 1
+          maxLength: 5
+        accent:
+          type: string
+          minLength: 1
+        schedule:
+          type: array
+          maxItems: 21
+          items:
+            $ref: "#/components/schemas/StylistScheduleEntry"
       required:
         - name
+        - role
+        - bio
+        - initials
+        - accent
+        - schedule
     StylistScheduleEntry:
       type: object
       properties:
@@ -640,4 +765,3 @@ components:
       type: apiKey
       in: header
       name: X-Salon-Manager
-
