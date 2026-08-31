@@ -17,12 +17,12 @@ type MessageKey =
    | 'scheduleSaved' | 'scheduleError' | 'openingBeforeClosing' | 'scheduleOverlap'
    | 'breaks' | 'addBreak' | 'removeBreak' | 'breakStart' | 'breakEnd' | 'noBreaks'
    | 'breakBeforeEnd' | 'breakOutsideHours' | 'breakOverlap'
-  | 'open' | 'close' | 'dayOff' | 'scheduleIntro' | 'noEmployees' | 'signOut'
+   | 'open' | 'close' | 'dayOff' | 'days' | 'scheduleIntro' | 'noEmployees' | 'signOut'
   | 'employeeRoster' | 'theTeam' | 'employeeIntro' | 'addEmployee' | 'newEmployee' | 'editEmployee'
   | 'removeEmployee' | 'removeEmployeeConfirm' | 'employeeRequired' | 'initialsTooLong'
   | 'workingSchedule' | 'saveEmployee' | 'employeeSaveError' | 'employeeAdded'
   | 'employeeUpdated' | 'employeeRemoved' | 'employeeRemoveError' | 'jobTitle' | 'initials'
-  | 'accent'
+   | 'accent' | 'photoUrl' | 'photoUrlHint' | 'profilePhoto' | 'optional'
   | 'reserveYourChair' | 'goodHourStarts' | 'bookingIntro' | 'employee' | 'service'
   | 'dateTime' | 'details' | 'choosePerson' | 'whoSee' | 'teamOnWay' | 'chooseService'
   | 'whatDoing' | 'menuRefreshing' | 'mostLoved' | 'findTime' | 'whenFeelsRight'
@@ -74,7 +74,7 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
      breaks: 'Breaks', addBreak: 'Add break', removeBreak: 'Remove break', breakStart: 'Start',
      breakEnd: 'End', noBreaks: 'No recurring breaks', breakBeforeEnd: 'Each break must start before it ends.',
      breakOutsideHours: 'Breaks must fall within working hours.', breakOverlap: 'Breaks cannot overlap on the same day.',
-     dayOff: 'Day off', scheduleIntro: 'Booking times are offered every 90 minutes. Services that overlap a recurring break or closing time are blocked.',
+    dayOff: 'Day off', days: 'days', scheduleIntro: 'Booking times are offered every 90 minutes. Services that overlap a recurring break or closing time are blocked.',
     noEmployees: 'No employees are available to schedule.', signOut: 'Sign out',
     employeeRoster: 'Employee roster', theTeam: 'The team',
     employeeIntro: 'Keep your people list, profiles, and working hours up to date.',
@@ -86,7 +86,9 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     employeeSaveError: 'We could not save this employee. Check the details and try again.',
     employeeAdded: 'has been added.', employeeUpdated: 'has been updated.',
     employeeRemoved: 'has been removed from booking.', employeeRemoveError: 'We could not remove this employee. Please try again.',
-    jobTitle: 'Job title', initials: 'Initials', accent: 'Accent',
+    jobTitle: 'Job title', initials: 'Initials', accent: 'Accent', photoUrl: 'Photo URL',
+    photoUrlHint: 'Optional. Use a public image link; initials are used if it cannot be loaded.',
+    profilePhoto: 'profile photo', optional: 'optional',
     reserveYourChair: 'Reserve your chair', goodHourStarts: 'A good hour starts here.',
     bookingIntro: 'Choose your person, then your ritual. We will show times that fit their schedule.',
     employee: 'Employee', service: 'Service', dateTime: 'Date & time', details: 'Details',
@@ -166,7 +168,7 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
      breaks: 'الاستراحات', addBreak: 'إضافة استراحة', removeBreak: 'إزالة الاستراحة', breakStart: 'البداية',
      breakEnd: 'النهاية', noBreaks: 'لا توجد استراحات متكررة', breakBeforeEnd: 'يجب أن يسبق وقت بداية الاستراحة وقت نهايتها.',
      breakOutsideHours: 'يجب أن تقع الاستراحات ضمن ساعات العمل.', breakOverlap: 'لا يمكن تداخل الاستراحات في اليوم نفسه.',
-     dayOff: 'إجازة', scheduleIntro: 'تتوفر أوقات الحجز كل 90 دقيقة. تُحجب الخدمات التي تتداخل مع استراحة متكررة أو وقت الإغلاق.',
+     dayOff: 'إجازة', days: 'أيام', scheduleIntro: 'تتوفر أوقات الحجز كل 90 دقيقة. تُحجب الخدمات التي تتداخل مع استراحة متكررة أو وقت الإغلاق.',
     noEmployees: 'لا يوجد موظفون متاحون للجدولة.', signOut: 'تسجيل الخروج',
     employeeRoster: 'قائمة الموظفين', theTeam: 'الفريق',
     employeeIntro: 'حافظ على قائمة فريقك وملفاتهم وساعات عملهم محدثة.',
@@ -178,7 +180,9 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     employeeSaveError: 'تعذر حفظ الموظف. تحقق من البيانات وحاول مرة أخرى.',
     employeeAdded: 'تمت إضافته.', employeeUpdated: 'تم تحديثه.',
     employeeRemoved: 'تمت إزالته من الحجوزات.', employeeRemoveError: 'تعذر إزالة الموظف. حاول مرة أخرى.',
-    jobTitle: 'المسمى الوظيفي', initials: 'الأحرف الأولى', accent: 'اللون',
+    jobTitle: 'المسمى الوظيفي', initials: 'الأحرف الأولى', accent: 'اللون', photoUrl: 'رابط الصورة',
+    photoUrlHint: 'اختياري. استخدم رابط صورة عام؛ ستظهر الأحرف الأولى إذا تعذر تحميلها.',
+    profilePhoto: 'الصورة الشخصية', optional: 'اختياري',
     reserveYourChair: 'احجز مقعدك', goodHourStarts: 'ساعة جميلة تبدأ من هنا.',
     bookingIntro: 'اختر الشخص ثم طقسك المفضل. سنعرض الأوقات التي تناسب جدوله.',
     employee: 'الموظف', service: 'الخدمة', dateTime: 'التاريخ والوقت', details: 'التفاصيل',

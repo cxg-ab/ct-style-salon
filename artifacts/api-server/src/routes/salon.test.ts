@@ -397,6 +397,7 @@ test("manager roster lifecycle persists edits and archives employees with appoin
     bio: string;
     initials: string;
     accent: string;
+    photoUrl: string | null;
     active: boolean;
     schedule: StylistScheduleEntry[];
   }>("/api/stylists", {
@@ -408,14 +409,16 @@ test("manager roster lifecycle persists edits and archives employees with appoin
       bio: "A temporary employee for the roster lifecycle test.",
       initials: "LE",
       accent: "#B86B45",
+      photoUrl: "https://cdn.example.com/lifecycle.jpg",
       schedule: scheduleWithMonday("10:00", "14:00"),
     }),
   });
   assert.equal(created.response.status, 201);
   assert.equal(created.body.active, true);
+  assert.equal(created.body.photoUrl, "https://cdn.example.com/lifecycle.jpg");
   createdStylistId = created.body.id;
 
-  const updated = await request<{ name: string; schedule: StylistScheduleEntry[] }>(
+  const updated = await request<{ name: string; photoUrl: string | null; schedule: StylistScheduleEntry[] }>(
     `/api/stylists/${createdStylistId}`,
     {
       method: "PATCH",
@@ -426,12 +429,14 @@ test("manager roster lifecycle persists edits and archives employees with appoin
         bio: "An updated employee profile for the roster lifecycle test.",
         initials: "ULE",
         accent: "#6B705C",
+        photoUrl: "https://cdn.example.com/updated-lifecycle.jpg",
         schedule: scheduleWithMonday("11:00", "15:00"),
       }),
     },
   );
   assert.equal(updated.response.status, 200);
   assert.equal(updated.body.name, "Updated Lifecycle Employee");
+  assert.equal(updated.body.photoUrl, "https://cdn.example.com/updated-lifecycle.jpg");
   assert.deepEqual(updated.body.schedule, scheduleWithMonday("11:00", "15:00"));
 
   const appointment = await request<{ stylistName: string }>("/api/appointments", {

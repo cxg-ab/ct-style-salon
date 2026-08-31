@@ -317,7 +317,7 @@ function Home() {
       <section className="mx-auto max-w-[1240px] px-5 py-20 sm:px-8 md:py-28">
          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end"><div><p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('thePeople')}</p><h2 className="mt-3 font-display text-5xl leading-none sm:text-6xl">{t('goodHands')}</h2></div><p className="max-w-sm text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('peopleIntro')}</p></div>
          {stylistsQuery.isLoading ? <div className="mt-10"><LoadingCards count={3} /></div> : stylistsQuery.isError ? <div className="mt-10"><ErrorMessage retry={() => stylistsQuery.refetch()} /></div> : displayedStylists.length === 0 ? <div className="mt-10 rounded-2xl border border-dashed border-[hsl(var(--border))] p-12 text-center text-sm text-[hsl(var(--muted-foreground))]" data-testid="empty-stylists">{t('teamOnWay')}</div> : (
-           <div className="mt-10 grid gap-4 sm:grid-cols-2 md:grid-cols-3">{displayedStylists.map((stylist) => <div key={stylist.id} className="group rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 transition-transform hover:-translate-y-1" data-testid={`card-stylist-${stylist.id}`}><div className="mb-12 flex items-start justify-between"><div className="grid h-14 w-14 place-items-center rounded-full text-sm font-bold" style={{ backgroundColor: `${stylist.accent}25`, color: stylist.accent }}>{stylist.initials}</div><span className="font-mono-ui text-[10px] text-[hsl(var(--muted-foreground))]">0{stylist.id}</span></div><p className="font-mono-ui text-[10px] uppercase tracking-[.15em] text-[hsl(var(--primary))]">{stylist.role}</p><h3 className="mt-2 font-display text-3xl">{stylist.name}</h3><p className="mt-3 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p></div>)}</div>
+           <div className="mt-10 grid gap-4 sm:grid-cols-2 md:grid-cols-3">{displayedStylists.map((stylist) => <div key={stylist.id} className="group rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 transition-transform hover:-translate-y-1" data-testid={`card-stylist-${stylist.id}`}><div className="mb-12 flex items-start justify-between"><StylistAvatar stylist={stylist} className="h-14 w-14" /><span className="font-mono-ui text-[10px] text-[hsl(var(--muted-foreground))]">0{stylist.id}</span></div><p className="font-mono-ui text-[10px] uppercase tracking-[.15em] text-[hsl(var(--primary))]">{stylist.role}</p><h3 className="mt-2 font-display text-3xl">{stylist.name}</h3><p className="mt-3 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p></div>)}</div>
         )}
       </section>
        <div className="mx-auto max-w-[1240px] px-5 pb-10 text-right font-mono-ui text-[9px] tracking-[.12em] text-[hsl(var(--muted-foreground))] sm:px-8" data-testid="status-health">{t('studioStatus')} · {healthQuery.data?.status ?? (healthQuery.isLoading ? t('checking') : t('available'))}</div>
@@ -394,6 +394,15 @@ function validateScheduleInForm(schedule: StylistScheduleEntry[]) {
   return undefined;
 }
 
+function StylistAvatar({ stylist, className = 'h-12 w-12', alt }: { stylist: Stylist; className?: string; alt?: string }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  useEffect(() => setImageFailed(false), [stylist.photoUrl]);
+  if (stylist.photoUrl && !imageFailed) {
+    return <img src={stylist.photoUrl} alt={alt ?? stylist.name} className={`${className} rounded-full object-cover`} onError={() => setImageFailed(true)} />;
+  }
+  return <span className={`${className} grid place-items-center rounded-full text-sm font-bold`} style={{ backgroundColor: `${stylist.accent}25`, color: stylist.accent }} aria-label={alt ?? stylist.name}>{stylist.initials}</span>;
+}
+
 function ScheduleFields({
   schedule,
   onChange,
@@ -442,12 +451,12 @@ function ScheduleFields({
     </div>
   );
 }
-function ScheduleEditor({ stylist }: { stylist: Stylist }) {
+function ScheduleEditor({ stylist, embedded = false }: { stylist: Stylist; embedded?: boolean }) {
   const { t, weekday, stylistCopy } = useLocale();
   const displayedStylist = stylistCopy(stylist);
   const [schedule, setSchedule] = useState<StylistScheduleEntry[]>(stylist.schedule);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string }>();
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [name, setName] = useState(stylist.name);
   const updateStylist = useUpdateStylist({
@@ -568,15 +577,24 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
   };
 
   return (
-    <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:p-5" data-testid={`schedule-editor-${stylist.id}`}>
-      <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-4 sm:flex-row sm:items-start">
-         <div className="flex min-w-0 items-center gap-4">
-           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-bold" style={{ backgroundColor: `${stylist.accent}25`, color: stylist.accent }}>{stylist.initials}</span>
+    <section className={embedded ? 'mt-4 border-t border-[hsl(var(--border))] pt-4' : 'rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:p-5'} data-testid={`schedule-editor-${stylist.id}`}>
+       <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-3 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            {!embedded && <StylistAvatar stylist={stylist} className="h-10 w-10 shrink-0" alt="" />}
             <button type="button" onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} aria-controls={`schedule-details-${stylist.id}`} className="min-w-0 text-left">
-              <span className="flex items-center gap-2"><h2 className="font-display text-2xl">{displayedStylist.name}</h2><ChevronDown size={18} className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} /></span>
-             <p className="mt-1 font-mono-ui text-[9px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">{displayedStylist.role}</p>
-           </button>
-        </div>
+              {embedded ? (
+                <>
+                  <span className="flex items-center gap-2"><span className="font-mono-ui text-[10px] font-semibold uppercase tracking-[.14em] text-[hsl(var(--primary))]">{t('workingSchedule')}</span><ChevronDown size={16} className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} /></span>
+                  <p className="mt-0.5 font-mono-ui text-[9px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">{schedule.length} {t('days')}</p>
+                </>
+              ) : (
+                <>
+                  <span className="flex items-center gap-2"><h2 className="font-display text-xl">{displayedStylist.name}</h2><ChevronDown size={16} className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} /></span>
+                  <p className="mt-0.5 font-mono-ui text-[9px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">{displayedStylist.role} · {schedule.length} {t('days')}</p>
+                </>
+              )}
+            </button>
+         </div>
          <div className="flex flex-wrap items-center justify-end gap-2">
             <button type="button" onClick={() => { setEditingName(true); setFeedback(undefined); }} className="inline-flex items-center justify-center rounded-full border border-[hsl(var(--border))] px-3 py-2.5 text-[11px] font-bold tracking-[.08em] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-edit-stylist-name-${stylist.id}`}>{t('editName')}</button>
             <button type="button" onClick={save} disabled={updateSchedule.isPending} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-4 py-2.5 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid={`button-save-schedule-${stylist.id}`}>
@@ -634,7 +652,7 @@ function ScheduleEditor({ stylist }: { stylist: Stylist }) {
         })}
       </div>
       {feedback && <p className={`mt-4 text-sm ${feedback.tone === 'error' ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--secondary))]'}`} role={feedback.tone === 'error' ? 'alert' : 'status'} data-testid={`status-schedule-${stylist.id}`}>{feedback.message}</p>}
-       <p className="mt-3 text-[11px] leading-5 text-[hsl(var(--muted-foreground))]">{t('scheduleIntro')}</p>
+       {expanded && <p className="mt-3 text-[11px] leading-5 text-[hsl(var(--muted-foreground))]">{t('scheduleIntro')}</p>}
     </section>
   );
 }
@@ -645,6 +663,7 @@ type EmployeeFormState = {
   bio: string;
   initials: string;
   accent: string;
+  photoUrl: string;
   schedule: StylistScheduleEntry[];
 };
 type ServiceFormState = {
@@ -861,6 +880,7 @@ function ManagerSchedule() {
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
   const stylists = stylistsQuery.data ?? [];
   const [editing, setEditing] = useState<number | 'new' | null>(null);
+  const [rosterExpanded, setRosterExpanded] = useState(true);
   const [feedback, setFeedback] = useState<string>();
   const deleteStylist = useDeleteStylist();
   const { signOut } = useClerk();
@@ -893,33 +913,38 @@ function ManagerSchedule() {
   };
 
   return (
-    <main className="mx-auto max-w-[1000px] px-5 py-14 sm:px-8 md:py-24">
-      <div className="flex flex-col justify-between gap-8 sm:flex-row sm:items-start">
+    <main className="mx-auto max-w-[960px] px-4 py-10 sm:px-6 md:py-16">
+      <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-start">
         <div className="max-w-2xl reveal">
            <p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('managerWorkspace')}</p>
-           <h1 className="mt-4 font-display text-6xl leading-[.84] sm:text-8xl">{t('managerWorkspaceShort')}<br /><i>{t('goodHands')}</i></h1>
-           <p className="mt-7 max-w-xl text-base leading-7 text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')} {t('scheduleIntro')}</p>
+           <h1 className="mt-3 font-display text-5xl leading-[.86] sm:text-7xl">{t('managerWorkspaceShort')}<br /><i>{t('goodHands')}</i></h1>
+           <p className="mt-5 max-w-xl text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')} {t('scheduleIntro')}</p>
         </div>
         <button type="button" onClick={() => signOut({ redirectUrl: basePath || '/' })} className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid="button-manager-sign-out">
            {t('signOut')}
         </button>
       </div>
       <ServiceManagement />
-      <section className="mt-12 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-5 sm:p-7" data-testid="employee-management">
-        <div className="flex flex-col justify-between gap-4 border-b border-[hsl(var(--border))] pb-5 sm:flex-row sm:items-end">
-          <div><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('employeeRoster')}</p><h2 className="mt-2 font-display text-4xl">{t('theTeam')}</h2><p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{t('employeeIntro')}</p></div>
+       <section className="mt-8 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-4 sm:p-5" data-testid="employee-management">
+         <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-4 sm:flex-row sm:items-center">
+           <button type="button" onClick={() => setRosterExpanded((current) => !current)} aria-expanded={rosterExpanded} aria-controls="employee-roster-details" className="min-w-0 text-left">
+             <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('employeeRoster')}</p>
+             <span className="mt-1 flex items-center gap-2"><h2 className="font-display text-3xl">{t('theTeam')}</h2><ChevronDown size={17} className={`transition-transform ${rosterExpanded ? 'rotate-180' : ''}`} /></span>
+             <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('employeeIntro')}</p>
+           </button>
           <button type="button" onClick={() => { setEditing('new'); setFeedback(undefined); }} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--card))] hover:bg-[hsl(var(--secondary)/.88)]" data-testid="button-add-employee"><Plus size={15} /> {t('addEmployee')}</button>
         </div>
+         <div id="employee-roster-details" hidden={!rosterExpanded}>
         {feedback && <p className="mt-5 text-sm text-[hsl(var(--secondary))]" role="status" data-testid="status-employee-success">{feedback}</p>}
         {editing === 'new' && <EmployeeProfileEditor onCancel={() => setEditing(null)} onSaved={finishSave} />}
-        <div className="mt-6 space-y-5">
+         <div className="mt-4 space-y-3">
           {stylistsQuery.isLoading ? <LoadingCards count={3} /> : stylistsQuery.isError ? <ErrorMessage retry={() => stylistsQuery.refetch()} /> : stylists.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-12 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noEmployees')}</div> : null}
           {stylists.map((stylist) => (
-            <div key={`profile-${stylist.id}`} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7" data-testid={`employee-card-${stylist.id}`}>
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+             <div key={`profile-${stylist.id}`} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`employee-card-${stylist.id}`}>
+               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div className="flex min-w-0 items-start gap-4">
-                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-bold" style={{ backgroundColor: `${stylist.accent}25`, color: stylist.accent }}>{stylist.initials}</span>
-                  <div><h3 className="font-display text-3xl">{stylist.name}</h3><p className="mt-1 font-mono-ui text-[10px] uppercase tracking-[.14em] text-[hsl(var(--primary))]">{stylist.role}</p><p className="mt-3 max-w-xl text-sm leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p></div>
+                   <StylistAvatar stylist={stylist} className="h-12 w-12 shrink-0" alt={`${stylist.name} ${t('profilePhoto')}`} />
+                   <div className="min-w-0"><h3 className="font-display text-2xl">{stylist.name}</h3><p className="mt-0.5 font-mono-ui text-[10px] uppercase tracking-[.14em] text-[hsl(var(--primary))]">{stylist.role}</p><p className="mt-2 max-w-xl text-xs leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p></div>
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <button type="button" onClick={() => { setEditing(stylist.id); setFeedback(undefined); }} className="inline-flex items-center justify-center gap-2 rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.1em] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-edit-employee-${stylist.id}`}><Pencil size={14} /> {t('editEmployee')}</button>
@@ -927,13 +952,12 @@ function ManagerSchedule() {
                 </div>
               </div>
               {editing === stylist.id && <EmployeeProfileEditor stylist={stylist} onCancel={() => setEditing(null)} onSaved={finishSave} />}
+              <ScheduleEditor stylist={stylist} embedded />
             </div>
           ))}
         </div>
+         </div>
       </section>
-      <div className="mt-6 space-y-5">
-         {stylistsQuery.isLoading ? null : stylistsQuery.isError ? null : stylists.length === 0 ? null : stylists.map((stylist) => <ScheduleEditor key={`schedule-${stylist.id}`} stylist={stylist} />)}
-      </div>
     </main>
   );
 }
@@ -983,7 +1007,7 @@ function Book() {
       <div className="grid gap-10 lg:grid-cols-[1fr_340px]">
         <div>
            <div className="mb-10 flex items-center gap-0">{bookingSteps.map((_, index) => <div key={index} className="flex flex-1 items-center"><div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs font-bold transition-colors ${step > index + 1 ? 'border-[hsl(var(--secondary))] bg-[hsl(var(--secondary))] text-[hsl(var(--card))]' : step === index + 1 ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))]'}`}>{step > index + 1 ? <Check size={14} /> : index + 1}</div><span className={`ml-2 hidden text-[10px] font-semibold uppercase tracking-[.1em] sm:block ${step === index + 1 ? 'text-[hsl(var(--foreground))]' : 'text-[hsl(var(--muted-foreground))]'}`}>{[t('employee'), t('service'), t('dateTime'), t('details')][index]}</span>{index < bookingSteps.length - 1 && <span className="mx-2 h-px flex-1 bg-[hsl(var(--border))] sm:mx-4" />}</div>)}</div>
-           {step === 1 && <StepPanel eyebrow={`01 / ${t('choosePerson')}`} title={t('whoSee')}>{stylistsQuery.isLoading ? <LoadingCards count={2} /> : stylistsQuery.isError ? <ErrorMessage retry={() => stylistsQuery.refetch()} /> : stylists.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('teamOnWay')}</div> : <div className="grid gap-3 sm:grid-cols-2">{stylists.map((rawStylist) => { const stylist = stylistCopy(rawStylist); return <button key={stylist.id} onClick={() => { const next = selectEmployee(stylist.id); setStylistId(next.stylistId); setServiceIds(next.serviceIds); setTime(next.time); setStep(next.step); }} className={`rounded-2xl border p-5 text-left transition-all hover:-translate-y-0.5 ${stylistId === stylist.id ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary)/.08)] ring-2 ring-[hsl(var(--primary)/.15)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.45)]'}`} data-testid={`button-stylist-${stylist.id}`}><div className="flex items-center gap-4"><span className="grid h-12 w-12 place-items-center rounded-full text-sm font-bold" style={{ backgroundColor: `${stylist.accent}25`, color: stylist.accent }}>{stylist.initials}</span><div><h3 className="font-display text-2xl">{stylist.name}</h3><p className="font-mono-ui text-[9px] uppercase tracking-[.11em] text-[hsl(var(--primary))]">{stylist.role}</p></div></div><p className="mt-5 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p></button>; })}</div>}</StepPanel>}
+           {step === 1 && <StepPanel eyebrow={`01 / ${t('choosePerson')}`} title={t('whoSee')}>{stylistsQuery.isLoading ? <LoadingCards count={2} /> : stylistsQuery.isError ? <ErrorMessage retry={() => stylistsQuery.refetch()} /> : stylists.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('teamOnWay')}</div> : <div className="grid gap-3 sm:grid-cols-2">{stylists.map((rawStylist) => { const stylist = stylistCopy(rawStylist); return <button key={stylist.id} onClick={() => { const next = selectEmployee(stylist.id); setStylistId(next.stylistId); setServiceIds(next.serviceIds); setTime(next.time); setStep(next.step); }} className={`rounded-2xl border p-5 text-left transition-all hover:-translate-y-0.5 ${stylistId === stylist.id ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary)/.08)] ring-2 ring-[hsl(var(--primary)/.15)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.45)]'}`} data-testid={`button-stylist-${stylist.id}`}><div className="flex items-center gap-4"><StylistAvatar stylist={stylist} className="h-12 w-12 shrink-0" /><div><h3 className="font-display text-2xl">{stylist.name}</h3><p className="font-mono-ui text-[9px] uppercase tracking-[.11em] text-[hsl(var(--primary))]">{stylist.role}</p></div></div><p className="mt-5 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p></button>; })}</div>}</StepPanel>}
            {step === 2 && <StepPanel eyebrow={`02 / ${t('chooseService')}`} title={t('whatDoing')}><div className="mb-6 rounded-2xl border border-[hsl(var(--primary)/.3)] bg-[hsl(var(--primary)/.05)] p-4" data-testid="selected-services"><p className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-[hsl(var(--primary))]">{t('selectedServices')}</p>{selectedServices.length === 0 ? <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{t('ritualBegins')}</p> : <div className="mt-3 space-y-2">{displayedServices.map((service) => <div key={service.id} className="flex items-center justify-between gap-3 rounded-xl bg-[hsl(var(--card))] px-3 py-2.5 text-sm"><span>{service.name} <span className="text-[hsl(var(--muted-foreground))]">· {service.durationMinutes} {t('minutes')} · {formatPrice(service.price)}</span></span><button type="button" onClick={() => { setServiceIds((current) => current.filter((id) => id !== service.id)); setTime(''); }} className="inline-flex items-center gap-1 text-xs font-bold text-[hsl(var(--destructive))]" aria-label={`${t('removeService')}: ${service.name}`} data-testid={`button-remove-service-${service.id}`}><X size={14} /> {t('removeService')}</button></div>)}</div>}</div><div className="grid gap-3 sm:grid-cols-2">{servicesQuery.isLoading ? <LoadingCards count={2} /> : servicesQuery.isError ? <ErrorMessage retry={() => servicesQuery.refetch()} /> : services.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('menuRefreshing')}</div> : services.map((rawService) => { const service = serviceCopy(rawService); const selected = serviceIds.includes(service.id); return <button key={service.id} type="button" aria-pressed={selected} onClick={() => { setServiceIds((current) => selected ? current.filter((id) => id !== service.id) : [...current, service.id]); setTime(''); }} className={`group rounded-2xl border p-5 text-left transition-all hover:-translate-y-0.5 ${selected ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary)/.08)] ring-2 ring-[hsl(var(--primary)/.15)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.45)]'}`} data-testid={`button-service-${service.id}`}><div className="flex items-start justify-between"><span className="grid h-9 w-9 place-items-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--primary))]"><Scissors size={16} /></span>{service.featured && <span className="font-mono-ui text-[9px] uppercase tracking-[.12em] text-[hsl(var(--primary))]">{t('mostLoved')}</span>}</div><h3 className="mt-8 font-display text-3xl">{service.name}</h3><p className="mt-2 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{service.description}</p><div className="mt-5 flex gap-4 font-mono-ui text-[10px] uppercase tracking-[.09em] text-[hsl(var(--muted-foreground))]"><span>{service.durationMinutes} {t('minutes')}</span><span>{formatPrice(service.price)}</span></div></button>; })}</div><BackButton onClick={() => setStep(1)} /></StepPanel>}
            {step === 3 && <StepPanel eyebrow={`03 / ${t('findTime')}`} title={`${t('whenFeelsRight')} ${displayedStylist?.name ?? t('employee')}?`}><p className="mb-5 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('timeIntro')}</p><DateStrip date={date} onChange={(value) => { setDate(value); setTime(''); }} /><div className="mt-8">{availabilityQuery.isLoading ? <div className="grid grid-cols-3 gap-2 sm:grid-cols-4"><div className="skeleton h-12 rounded-xl" /><div className="skeleton h-12 rounded-xl" /><div className="skeleton h-12 rounded-xl" /></div> : availabilityQuery.isError ? <ErrorMessage retry={() => availabilityQuery.refetch()} /> : slots.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]" data-testid="empty-time-slots">{t('noOpenTimes')} {displayedStylist?.name ?? t('employee')} {t('chooseAnotherDate')}</div> : <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">{slots.map((slot) => <button key={slot} onClick={() => setTime(slot)} className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-all ${time === slot ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary))]'}`} data-testid={`button-time-${slot.replaceAll(':', '-')}`}>{slot}</button>)}</div>}</div><BackButton onClick={() => setStep(2)} /></StepPanel>}
            {step === 4 && <StepPanel eyebrow={`04 / ${t('yourDetails')}`} title={t('sendNote')}><form onSubmit={submit} className="space-y-4"><Field icon={<UserRound size={16} />} label={t('fullName')} value={form.customerName} onChange={(value) => updateField('customerName', value)} required testId="input-customer-name" /><Field icon={<Mail size={16} />} label={t('emailAddress')} type="email" value={form.email} onChange={(value) => updateField('email', value)} required testId="input-customer-email" /><Field icon={<Phone size={16} />} label={t('phoneNumber')} type="tel" value={form.phone} onChange={(value) => updateField('phone', value)} required testId="input-customer-phone" /><label className="block text-xs font-semibold">{t('anythingKnow')} <textarea value={form.notes} onChange={(event) => updateField('notes', event.target.value)} placeholder={t('notesPlaceholder')} className="mt-2 min-h-[92px] w-full resize-y rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] p-4 text-sm font-normal placeholder:text-[hsl(var(--muted-foreground))]" data-testid="input-notes" /></label><div className="flex items-center justify-between gap-4 pt-4"><BackButton onClick={() => setStep(3)} /><button disabled={createAppointment.isPending} className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--primary))] px-6 py-4 text-xs font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" type="submit" data-testid="button-confirm-appointment">{createAppointment.isPending ? t('holdingChair') : t('confirmAppointment')} <ArrowRight size={15} /></button></div>{createAppointment.isError && <p className="text-sm text-[hsl(var(--destructive))]" data-testid="status-booking-error">{t('bookingTaken')}</p>}</form></StepPanel>}
@@ -1142,6 +1166,7 @@ const emptyEmployeeForm: EmployeeFormState = {
   bio: '',
   initials: '',
   accent: '#B86B45',
+  photoUrl: '',
   schedule: defaultEmployeeSchedule,
 };
 
@@ -1152,6 +1177,7 @@ function employeeToForm(stylist: Stylist): EmployeeFormState {
     bio: stylist.bio,
     initials: stylist.initials,
     accent: stylist.accent,
+    photoUrl: stylist.photoUrl ?? '',
     schedule: stylist.schedule,
   };
 }
@@ -1190,6 +1216,7 @@ function EmployeeProfileEditor({
       bio: form.bio.trim(),
       initials: form.initials.trim().toUpperCase(),
       accent: form.accent.trim(),
+      photoUrl: form.photoUrl.trim() || null,
       schedule: form.schedule,
     };
     if (!data.name || !data.role || !data.bio || !data.initials || !data.accent) {
@@ -1242,6 +1269,10 @@ function EmployeeProfileEditor({
         </label>
         <label className="text-xs font-semibold">{t('accent')}
           <input required value={form.accent} onChange={(event) => updateField('accent', event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-employee-accent" />
+        </label>
+        <label className="text-xs font-semibold sm:col-span-2">{t('photoUrl')} <span className="font-normal text-[hsl(var(--muted-foreground))]">({t('optional')})</span>
+          <input type="url" value={form.photoUrl} onChange={(event) => updateField('photoUrl', event.target.value)} placeholder="https://…" className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-employee-photo-url" />
+          <span className="mt-1 block text-[11px] font-normal text-[hsl(var(--muted-foreground))]">{t('photoUrlHint')}</span>
         </label>
         <label className="text-xs font-semibold sm:col-span-2">{t('description')}
           <textarea required value={form.bio} onChange={(event) => updateField('bio', event.target.value)} rows={3} className="mt-2 w-full resize-y rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 py-3 text-sm font-normal" data-testid="input-employee-bio" />
