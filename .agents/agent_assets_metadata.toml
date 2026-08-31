@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "LHXjGJKoirvQJnwR0vVuU"
+uri = "file://artifacts/ct-style-salon/public/ct-style-logo-transparent.png"
+type = "image"
+title = "CT Style Salon logo"
+description = "Extracted and cleaned CT STYLE storefront logo from the uploaded photo for reuse in the salon app."
+logical_id = "0e5e6016-ce68-4391-bf76-d6875da5dda8"
+content_hash = "sha256:0c4ca6c6347b2d5a512765b879de2b8ad106db3285abe7ad4516c4c102985883"
+size = 254120
+mtime_ms = 1788164402068
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:70d339f0-fb2d-4ffa-b908-f35e539f1205/0e5e6016-ce68-4391-bf76-d6875da5dda8/936a3554-04c5-4cd7-9476-32e5dfaff021"
+storage_version_token = "1788164590306615"
+content_type = "image/png"
