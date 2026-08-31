@@ -265,6 +265,28 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
+
+  html[dir='rtl'] {
+    direction: rtl;
+  }
+
+  html[dir='rtl'] .text-left {
+    text-align: right;
+  }
+
+  html[dir='rtl'] .text-right {
+    text-align: left;
+  }
+
+  html[dir='rtl'] [class*='border-l'] {
+    border-left-width: 0;
+    border-right-width: 1px;
+  }
+
+  html[dir='rtl'] [data-testid='button-back'] svg,
+  html[dir='rtl'] [data-testid^='link-'] svg {
+    transform: rotate(180deg);
+  }
 }
 
 @layer utilities {
