@@ -23,3 +23,5 @@ export * from './stylistInput';
 export * from './stylistScheduleEntry';
 export * from './stylistScheduleUpdate';
 export * from './stylistUpdate';
+export * from './uploadUrlRequest';
+export * from './uploadUrlResponse';

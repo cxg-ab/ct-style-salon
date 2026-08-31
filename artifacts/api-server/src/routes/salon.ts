@@ -152,7 +152,7 @@ type AuthenticatedRequest = Request & {
   salonManagerId?: string;
 };
 
-async function requireSalonManager(req: AuthenticatedRequest, res: Response): Promise<boolean> {
+export async function requireSalonManager(req: AuthenticatedRequest, res: Response): Promise<boolean> {
   const auth = getAuth(req);
   const userId = auth?.userId;
   const testManager =
