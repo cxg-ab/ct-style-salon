@@ -193,7 +193,7 @@ router.post("/appointments", async (req, res): Promise<void> => {
 router.get("/salon-summary", (_req, res): void => {
   res.json(
     GetSalonSummaryResponse.parse({
-      rating: 4.9,
+      rating: 4.8,
       reviewCount: 212,
       nextAvailable: "Today at 4:00 PM",
       neighborhood: "My City Centre Masdar",

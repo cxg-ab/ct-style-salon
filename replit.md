@@ -31,7 +31,8 @@ CT Style Salon is a polished salon booking experience for discovering services, 
 ## Architecture decisions
 
 - Booking is guest-first and uses email lookup instead of requiring account creation.
-- The storefront reference image is used as the salon's hero visual, with an editorial terracotta, olive, and cream palette.
+- The storefront reference image is used as the salon's hero visual, with a charcoal, warm-wood, bronze, and cream palette informed by the public CT Style Salon listing.
+- Public listing details used in the experience: My City Centre Masdar, Khalifa City/Abu Dhabi; 4.8 rating from 212 reviews; phone +971 2 552 0422; Instagram @ct_style_salon.
 - Calendar-only appointment dates remain date strings in PostgreSQL to avoid timezone shifts.
 - Availability is computed from a fixed daily slot schedule and existing appointments.
 
