@@ -307,7 +307,7 @@ export const getGetAvailabilityUrl = (params: GetAvailabilityParams,) => {
 }
 
 /**
- * @summary Get appointment time slots for an employee and date
+ * @summary Get appointment time slots for an employee, service, and date
  */
 export const getAvailability = async (params: GetAvailabilityParams, options?: Parameters<typeof customFetch>[1]): Promise<Availability[]> => {
 
@@ -354,7 +354,7 @@ export type GetAvailabilityQueryError = ErrorType<ErrorResponse>
 
 
 /**
- * @summary Get appointment time slots for an employee and date
+ * @summary Get appointment time slots for an employee, service, and date
  */
 
 export function useGetAvailability<TData = Awaited<ReturnType<typeof getAvailability>>, TError = ErrorType<ErrorResponse>>(

@@ -35,6 +35,44 @@ const stylistSchedules: Record<string, { workingDays: number[]; slots: string[] 
   },
 };
 
+type BookedAppointment = {
+  time: string;
+  durationMinutes: number;
+};
+
+function timeToMinutes(value: string): number | undefined {
+  const match = /^(\d{1,2}):(\d{2}) (AM|PM)$/.exec(value);
+  if (!match) {
+    return undefined;
+  }
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 1 || hour > 12 || minute > 59) {
+    return undefined;
+  }
+
+  return (hour % 12) * 60 + minute + (match[3] === "PM" ? 12 * 60 : 0);
+}
+
+function appointmentTimesOverlap(
+  startTime: string,
+  durationMinutes: number,
+  booked: BookedAppointment,
+): boolean {
+  const start = timeToMinutes(startTime);
+  const bookedStart = timeToMinutes(booked.time);
+  if (start === undefined || bookedStart === undefined) {
+    return false;
+  }
+
+  // Ranges are half-open, so an appointment ending at another's start is valid.
+  return (
+    start < bookedStart + booked.durationMinutes &&
+    bookedStart < start + durationMinutes
+  );
+}
+
 function toDate(value: unknown): Date | undefined {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return undefined;
@@ -77,6 +115,7 @@ router.get("/availability", async (req, res): Promise<void> => {
   const parsed = GetAvailabilityQueryParams.safeParse({
     date: toDate(req.query.date),
     stylistId: Number(req.query.stylistId),
+    serviceId: Number(req.query.serviceId),
   });
   if (!parsed.success) {
     res.status(400).json({ error: "Choose a valid appointment date." });
@@ -95,18 +134,34 @@ router.get("/availability", async (req, res): Promise<void> => {
     return;
   }
 
+  const serviceRows = await db
+    .select({ durationMinutes: servicesTable.durationMinutes })
+    .from(servicesTable)
+    .where(eq(servicesTable.id, parsed.data.serviceId))
+    .limit(1);
+  const service = serviceRows[0];
+  if (!service) {
+    res.status(400).json({ error: "Choose a valid service." });
+    return;
+  }
+
   const booked = await db
     .select({
       stylistId: appointmentsTable.stylistId,
       time: appointmentsTable.time,
+      durationMinutes: servicesTable.durationMinutes,
     })
     .from(appointmentsTable)
+    .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
     .where(eq(appointmentsTable.date, date));
-  const bookedByStylist = new Map<number, Set<string>>();
+  const bookedByStylist = new Map<number, BookedAppointment[]>();
   for (const appointment of booked) {
-    const times = bookedByStylist.get(appointment.stylistId) ?? new Set<string>();
-    times.add(appointment.time);
-    bookedByStylist.set(appointment.stylistId, times);
+    const appointments = bookedByStylist.get(appointment.stylistId) ?? [];
+    appointments.push({
+      time: appointment.time,
+      durationMinutes: appointment.durationMinutes,
+    });
+    bookedByStylist.set(appointment.stylistId, appointments);
   }
 
   const schedule = stylistSchedules[stylist.name];
@@ -116,7 +171,16 @@ router.get("/availability", async (req, res): Promise<void> => {
     date: parsed.data.date,
     slots: schedule?.workingDays.includes(weekday)
       ? schedule.slots.filter(
-      (slot) => !bookedByStylist.get(stylist.id)?.has(slot),
+          (slot) =>
+            !bookedByStylist
+              .get(stylist.id)
+              ?.some((bookedAppointment) =>
+                appointmentTimesOverlap(
+                  slot,
+                  service.durationMinutes,
+                  bookedAppointment,
+                ),
+              ),
         )
       : [],
   }];
@@ -187,18 +251,28 @@ router.post("/appointments", async (req, res): Promise<void> => {
   }
 
   const date = body.data.date.toISOString().slice(0, 10);
-  const [existing] = await db
-    .select({ id: appointmentsTable.id })
+  const existingAppointments = await db
+    .select({
+      time: appointmentsTable.time,
+      durationMinutes: servicesTable.durationMinutes,
+    })
     .from(appointmentsTable)
+    .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
     .where(
       and(
         eq(appointmentsTable.stylistId, body.data.stylistId),
         eq(appointmentsTable.date, date),
-        eq(appointmentsTable.time, body.data.time),
+      ),
+    );
+  if (
+    existingAppointments.some((existingAppointment) =>
+      appointmentTimesOverlap(
+        body.data.time,
+        service[0].durationMinutes,
+        existingAppointment,
       ),
     )
-    .limit(1);
-  if (existing) {
+  ) {
     res.status(400).json({ error: "That time was just booked. Please choose another slot." });
     return;
   }

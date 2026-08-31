@@ -80,6 +80,7 @@ export interface ErrorResponse {
 export type GetAvailabilityParams = {
 date: string;
 stylistId: number;
+serviceId: number;
 };
 
 export type ListAppointmentsParams = {

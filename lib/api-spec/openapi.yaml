@@ -58,7 +58,7 @@ paths:
     get:
       operationId: getAvailability
       tags: [salon]
-      summary: Get appointment time slots for an employee and date
+      summary: Get appointment time slots for an employee, service, and date
       parameters:
         - name: date
           in: query
@@ -67,6 +67,11 @@ paths:
             type: string
             format: date
         - name: stylistId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: serviceId
           in: query
           required: true
           schema:

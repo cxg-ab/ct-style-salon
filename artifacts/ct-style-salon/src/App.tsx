@@ -241,7 +241,7 @@ function Book() {
   const [confirmed, setConfirmed] = useState<any>();
   const servicesQuery = useListServices({ query: { queryKey: getListServicesQueryKey() } });
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
-  const availabilityParams = useMemo(() => ({ date, stylistId: stylistId ?? 0 }), [date, stylistId]);
+  const availabilityParams = useMemo(() => ({ date, stylistId: stylistId ?? 0, serviceId: serviceId ?? 0 }), [date, stylistId, serviceId]);
   const availabilityQuery = useGetAvailability(availabilityParams, { query: { enabled: Boolean(date && stylistId && serviceId), queryKey: getGetAvailabilityQueryKey(availabilityParams) } });
   const createAppointment = useCreateAppointment();
   const services = servicesQuery.data ?? [];
