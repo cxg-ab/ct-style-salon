@@ -896,7 +896,7 @@ function ManagerSchedule() {
                 </div>
               </div>
               {editing === stylist.id && <EmployeeProfileEditor stylist={stylist} onCancel={() => setEditing(null)} onSaved={finishSave} />}
-              <ScheduleEditor stylist={stylist} embedded />
+              {editing !== stylist.id && <ScheduleEditor stylist={stylist} embedded />}
             </div>
           ))}
         </div>
