@@ -79,6 +79,7 @@ export interface ErrorResponse {
 
 export type GetAvailabilityParams = {
 date: string;
+stylistId: number;
 };
 
 export type ListAppointmentsParams = {

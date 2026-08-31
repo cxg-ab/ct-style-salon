@@ -8,4 +8,5 @@
 
 export type GetAvailabilityParams = {
 date: Date;
+stylistId: number;
 };

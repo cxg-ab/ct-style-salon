@@ -20,7 +20,20 @@ import {
 import { ensureSalonSeeded } from "../lib/salon-seed";
 
 const router: IRouter = Router();
-const baseSlots = ["10:00 AM", "11:30 AM", "1:00 PM", "2:30 PM", "4:00 PM", "5:30 PM", "7:00 PM"];
+const stylistSchedules: Record<string, { workingDays: number[]; slots: string[] }> = {
+  Marco: {
+    workingDays: [1, 2, 3, 4, 5, 6],
+    slots: ["10:00 AM", "11:30 AM", "1:00 PM", "2:30 PM", "4:00 PM", "5:30 PM", "7:00 PM"],
+  },
+  Aisha: {
+    workingDays: [0, 1, 2, 3, 5, 6],
+    slots: ["11:00 AM", "12:30 PM", "2:00 PM", "3:30 PM", "5:00 PM", "6:30 PM", "8:00 PM"],
+  },
+  Daniel: {
+    workingDays: [1, 2, 3, 4, 5],
+    slots: ["9:30 AM", "11:00 AM", "12:30 PM", "2:00 PM", "3:30 PM", "5:00 PM", "6:30 PM"],
+  },
+};
 
 function toDate(value: unknown): Date | undefined {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -63,6 +76,7 @@ router.get("/availability", async (req, res): Promise<void> => {
   await ensureSalonSeeded();
   const parsed = GetAvailabilityQueryParams.safeParse({
     date: toDate(req.query.date),
+    stylistId: Number(req.query.stylistId),
   });
   if (!parsed.success) {
     res.status(400).json({ error: "Choose a valid appointment date." });
@@ -70,6 +84,17 @@ router.get("/availability", async (req, res): Promise<void> => {
   }
 
   const date = String(req.query.date);
+  const stylistRows = await db
+    .select({ id: stylistsTable.id, name: stylistsTable.name })
+    .from(stylistsTable)
+    .where(eq(stylistsTable.id, parsed.data.stylistId))
+    .limit(1);
+  const stylist = stylistRows[0];
+  if (!stylist) {
+    res.status(400).json({ error: "Choose a valid employee." });
+    return;
+  }
+
   const booked = await db
     .select({
       stylistId: appointmentsTable.stylistId,
@@ -84,14 +109,17 @@ router.get("/availability", async (req, res): Promise<void> => {
     bookedByStylist.set(appointment.stylistId, times);
   }
 
-  const stylists = await db.select({ id: stylistsTable.id }).from(stylistsTable);
-  const output = stylists.map((stylist) => ({
+  const schedule = stylistSchedules[stylist.name];
+  const weekday = parsed.data.date.getUTCDay();
+  const output = [{
     stylistId: stylist.id,
     date: parsed.data.date,
-    slots: baseSlots.filter(
+    slots: schedule?.workingDays.includes(weekday)
+      ? schedule.slots.filter(
       (slot) => !bookedByStylist.get(stylist.id)?.has(slot),
-    ),
-  }));
+        )
+      : [],
+  }];
   res.json(GetAvailabilityResponse.parse(output));
 });
 
@@ -148,6 +176,13 @@ router.post("/appointments", async (req, res): Promise<void> => {
     .limit(1);
   if (!service[0] || !stylist[0]) {
     res.status(400).json({ error: "That service or stylist is no longer available." });
+    return;
+  }
+
+  const schedule = stylistSchedules[stylist[0].name];
+  const weekday = body.data.date.getUTCDay();
+  if (!schedule?.workingDays.includes(weekday) || !schedule.slots.includes(body.data.time)) {
+    res.status(400).json({ error: "That employee is not scheduled for the selected time." });
     return;
   }
 

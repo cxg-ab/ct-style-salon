@@ -47,10 +47,11 @@ export const ListStylistsResponse = zod.array(ListStylistsResponseItem)
 
 
 /**
- * @summary Get appointment time slots for a date
+ * @summary Get appointment time slots for an employee and date
  */
 export const GetAvailabilityQueryParams = zod.object({
-  "date": zod.date()
+  "date": zod.date(),
+  "stylistId": zod.coerce.number().int()
 })
 
 export const GetAvailabilityResponseItem = zod.object({
