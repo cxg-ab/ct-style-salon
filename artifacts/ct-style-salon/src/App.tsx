@@ -60,6 +60,7 @@ import storefrontImage from '@assets/WhatsApp_Image_2026-08-31_at_11.57.17_17881
 import { ErrorBoundary } from '@/components/error-boundary';
 import NotFound from '@/pages/not-found';
 import { bookingSteps, selectEmployee } from '@/lib/booking-flow';
+import { trackEvent } from '@/lib/analytics';
 import { LocaleProvider, useLocale } from '@/lib/locale';
 import { Route, Switch, Link, Router as WouterRouter, useLocation } from 'wouter';
 
@@ -411,6 +412,7 @@ function stylistPhotoSource(photoUrl?: string | null): string | undefined {
 }
 
 const EMPLOYEE_PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const MAX_EMPLOYEE_PHOTO_SIZE = 5 * 1024 * 1024;
 
 function uploadFileToStorage(file: File, uploadURL: string, onProgress: (progress: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -1189,7 +1191,13 @@ function EmployeeProfileEditor({
 
   const choosePhoto = async (file: File | undefined) => {
     if (!file) return;
-    if (!EMPLOYEE_PHOTO_TYPES.has(file.type) || file.size > 5 * 1024 * 1024) {
+    const fileType = file.type || 'unknown';
+    if (!EMPLOYEE_PHOTO_TYPES.has(file.type) || file.size > MAX_EMPLOYEE_PHOTO_SIZE) {
+      trackEvent('employee_photo_upload', {
+        outcome: 'failure',
+        file_type: fileType,
+        failure_category: file.size > MAX_EMPLOYEE_PHOTO_SIZE ? 'file_too_large' : 'unsupported_type',
+      });
       setFeedback(t('photoUploadError'));
       setPhotoUpload({ status: 'error', progress: 0 });
       return;
@@ -1201,10 +1209,30 @@ function EmployeeProfileEditor({
     setFeedback(undefined);
     setPhotoUpload({ status: 'uploading', progress: 0 });
     try {
-      const upload = await requestUploadUrl({ name: file.name, size: file.size, contentType: file.type });
-      await uploadFileToStorage(file, upload.uploadURL, (progress) => setPhotoUpload({ status: 'uploading', progress }));
+      let upload;
+      try {
+        upload = await requestUploadUrl({ name: file.name, size: file.size, contentType: file.type });
+      } catch {
+        trackEvent('employee_photo_upload', {
+          outcome: 'failure',
+          file_type: fileType,
+          failure_category: 'upload_url_request',
+        });
+        throw new Error('Photo upload URL request failed.');
+      }
+      try {
+        await uploadFileToStorage(file, upload.uploadURL, (progress) => setPhotoUpload({ status: 'uploading', progress }));
+      } catch {
+        trackEvent('employee_photo_upload', {
+          outcome: 'failure',
+          file_type: fileType,
+          failure_category: 'storage_upload',
+        });
+        throw new Error('Photo storage upload failed.');
+      }
       updateField('photoUrl', upload.objectPath);
       setPhotoUpload({ status: 'success', progress: 100 });
+      trackEvent('employee_photo_upload', { outcome: 'success', file_type: fileType });
     } catch {
       setPhotoUpload({ status: 'error', progress: 0 });
       setFeedback(t('photoUploadError'));
