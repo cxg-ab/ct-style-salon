@@ -384,6 +384,12 @@ function scheduleErrorMessage(
   return fallback;
 }
 
+function isManagerAccessDenied(error: unknown) {
+  if (!error || typeof error !== 'object' || !('data' in error)) return false;
+  const data = (error as { data?: unknown }).data;
+  if (!data || typeof data !== 'object' || !('error' in data)) return false;
+  return (data as { error?: unknown }).error === 'Your account does not have salon manager access.';
+}
 function validateScheduleInForm(schedule: StylistScheduleEntry[]) {
   for (const entry of schedule) {
     if (entry.openTime >= entry.closeTime) {
@@ -990,7 +996,7 @@ function ManagerAppointments() {
   );
 }
 
-function ManagerOverview() {
+function ManagerOverview({ onOpenTeam }: { onOpenTeam?: () => void }) {
   const { t, formatDate, statusLabel, translateServiceName } = useLocale();
   const servicesQuery = useListServices({ query: { queryKey: getListServicesQueryKey() } });
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
@@ -1085,7 +1091,7 @@ function ManagerOverview() {
           <p className="font-mono-ui text-[10px] uppercase tracking-[.18em] text-[hsl(var(--primary))]">{t('quickAccess')}</p>
           <div className="mt-3 divide-y divide-[hsl(var(--border)/.72)]">
             <a href="#service-management" className="group flex min-h-[52px] items-center justify-between gap-3 py-3 text-sm font-semibold" data-testid="link-manager-services"><span className="flex items-center gap-3"><Scissors size={15} className="text-[hsl(var(--primary))]" />{t('serviceMenu')}</span><ArrowRight size={15} className="text-[hsl(var(--muted-foreground))] transition-transform group-hover:translate-x-1" /></a>
-            <a href="#employee-management" className="group flex min-h-[52px] items-center justify-between gap-3 py-3 text-sm font-semibold" data-testid="link-manager-team"><span className="flex items-center gap-3"><UserRound size={15} className="text-[hsl(var(--primary))]" />{t('employeeRoster')}</span><ArrowRight size={15} className="text-[hsl(var(--muted-foreground))] transition-transform group-hover:translate-x-1" /></a>
+            <a href="#employee-management" onClick={onOpenTeam} className="group flex min-h-[52px] items-center justify-between gap-3 py-3 text-sm font-semibold" data-testid="link-manager-team"><span className="flex items-center gap-3"><UserRound size={15} className="text-[hsl(var(--primary))]" />{t('employeeRoster')}</span><ArrowRight size={15} className="text-[hsl(var(--muted-foreground))] transition-transform group-hover:translate-x-1" /></a>
             <a href="#appointment-management" className="group flex min-h-[52px] items-center justify-between gap-3 py-3 text-sm font-semibold" data-testid="link-manager-appointments"><span className="flex items-center gap-3"><CalendarDays size={15} className="text-[hsl(var(--primary))]" />{t('appointmentList')}</span><ArrowRight size={15} className="text-[hsl(var(--muted-foreground))] transition-transform group-hover:translate-x-1" /></a>
           </div>
         </div>
@@ -1139,7 +1145,7 @@ function ManagerSchedule() {
            {t('signOut')}
          </button>
        </div>
-       <ManagerOverview />
+       <ManagerOverview onOpenTeam={() => setRosterExpanded(true)} />
       <div className="manager-grid grid gap-4 lg:grid-cols-2" data-testid="manager-masonry">
       <ServiceManagement />
         <section id="employee-management" className="manager-section mt-0 rounded-2xl border p-4 sm:p-5" data-testid="employee-management">
@@ -1166,7 +1172,7 @@ function ManagerSchedule() {
                 stylist={stylist}
                 isEditing={editing === stylist.id}
                 isRemoving={deleteStylist.isPending}
-                onEdit={() => { setEditing(stylist.id); setFeedback(undefined); }}
+                 onEdit={() => { setRosterExpanded(true); setEditing(stylist.id); setFeedback(undefined); }}
                 onRemove={() => removeEmployee(stylist)}
                 onCancel={() => setEditing(null)}
                 onSaved={finishSave}
@@ -1422,7 +1428,13 @@ function SignUpPage() {
 function ManagerRoute() {
   const { t } = useLocale();
   const { isLoaded, isSignedIn } = useAuth();
-  const { user } = useUser();
+  const managerAccessQuery = useListManagerCustomers({
+    query: {
+      enabled: isLoaded && Boolean(isSignedIn),
+      queryKey: getListManagerCustomersQueryKey(),
+      retry: false,
+    },
+  });
 
   if (!isLoaded) {
     return <main className="mx-auto flex min-h-[calc(100dvh-76px)] max-w-[1000px] items-center px-5 py-14 sm:px-8" data-testid="manager-auth-loading"><div className="w-full"><div className="skeleton h-10 w-48 rounded-xl" /><p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">{t('signInLoading')}</p></div></main>;
@@ -1441,7 +1453,11 @@ function ManagerRoute() {
     );
   }
 
-  if (user?.publicMetadata?.role !== 'manager') {
+  if (managerAccessQuery.isLoading || managerAccessQuery.isPending) {
+    return <main className="mx-auto flex min-h-[calc(100dvh-76px)] max-w-[1000px] items-center px-5 py-14 sm:px-8" data-testid="manager-auth-loading"><div className="w-full"><div className="skeleton h-10 w-48 rounded-xl" /><p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">{t('signInLoading')}</p></div></main>;
+  }
+
+  if (managerAccessQuery.isError && isManagerAccessDenied(managerAccessQuery.error)) {
     return (
       <main className="mx-auto flex min-h-[calc(100dvh-76px)] max-w-[760px] items-center px-5 py-16 sm:px-8">
         <div className="w-full rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 sm:p-12" data-testid="manager-access-denied">
@@ -1451,6 +1467,10 @@ function ManagerRoute() {
         </div>
       </main>
     );
+  }
+
+  if (managerAccessQuery.isError) {
+    return <main className="mx-auto flex min-h-[calc(100dvh-76px)] max-w-[1000px] items-center px-5 py-14 sm:px-8"><div className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6"><ErrorMessage retry={() => managerAccessQuery.refetch()} /></div></main>;
   }
 
   return <ManagerSchedule />;

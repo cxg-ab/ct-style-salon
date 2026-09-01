@@ -4,3 +4,4 @@
 - [Generated client freshness](generated-client-freshness.md) — OpenAPI contract changes require codegen before runtime validators reflect them.
 - [Artifact public asset paths](artifact-public-asset-paths.md) — verify the mounted preview base before persisting URLs for static web assets.
 - [Booking-window test fixtures](booking-window-test-fixtures.md) — legacy API fixtures use historical dates, so the five-day guard is bypassed only under test.
+- [Clerk manager browser tests](clerk-manager-browser-tests.md) — programmatic sign-in does not guarantee a manager role exists in signed claims or the live Clerk user record.
