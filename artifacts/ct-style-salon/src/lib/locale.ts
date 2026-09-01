@@ -53,7 +53,7 @@ type MessageKey =
    | 'quickAccess' | 'viewAll' | 'noUpcomingAppointments' | 'refreshData' | 'workspaceTitle'
    | 'workspaceIntro' | 'todayAt' | 'openingHours' | 'active' | 'scheduled' | 'openAndEdit' | 'closeSection'
    | 'markDone' | 'cancelBooking' | 'editBooking' | 'whatsapp' | 'notes' | 'status' | 'completed' | 'saveBooking'
-   | 'archive' | 'archivedAppointments' | 'exportCsv' | 'todaysWorkload' | 'totalAppointmentsForDate' | 'completedToday' | 'needsConfirmation' | 'nextVisit'
+  | 'archive' | 'archivedAppointments' | 'exportCsv' | 'todaysWorkload' | 'completedAppointmentsToday' | 'totalAppointmentsForDate' | 'completedToday' | 'needsConfirmation' | 'nextVisit'
     | 'confirmCancellation' | 'cancelBookingWarning' | 'bookingUpdated' | 'bookingCompleted' | 'bookingUpdateError' | 'created'
    | 'whatsappMessage' | 'swipeToScroll';
 
@@ -176,7 +176,7 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
      markDone: 'Mark done', cancelBooking: 'Cancel booking', editBooking: 'Edit booking',
      whatsapp: 'WhatsApp', notes: 'Notes', status: 'Status', completed: 'Completed', saveBooking: 'Save booking',
      archive: 'Archive', archivedAppointments: 'Archived appointments', exportCsv: 'Export CSV',
-       todaysWorkload: 'Today’s workload', totalAppointmentsForDate: 'Total appointments for date', completedToday: 'done today', needsConfirmation: 'Needs confirmation', nextVisit: 'Next visit',
+       todaysWorkload: 'Today’s workload', completedAppointmentsToday: 'Completed appointments today', totalAppointmentsForDate: 'Total appointments for date', completedToday: 'done today', needsConfirmation: 'Needs confirmation', nextVisit: 'Next visit',
      confirmCancellation: 'Confirm cancellation', cancelBookingWarning: 'This booking will be cancelled and the slot freed.',
       bookingUpdated: 'Booking was updated.', bookingCompleted: 'Booking marked done and moved to the archive.', bookingUpdateError: 'We could not update this booking. Check the details and try again.',
       created: 'Created',
@@ -301,7 +301,7 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
       markDone: 'اكتمل', cancelBooking: 'إلغاء الحجز', editBooking: 'تعديل الحجز',
       whatsapp: 'واتساب', notes: 'ملاحظات', status: 'الحالة', completed: 'مكتمل', saveBooking: 'حفظ الحجز',
       archive: 'الأرشيف', archivedAppointments: 'المواعيد المؤرشفة', exportCsv: 'تصدير CSV',
-       todaysWorkload: 'مهام اليوم', totalAppointmentsForDate: 'إجمالي المواعيد لهذا التاريخ', completedToday: 'مكتملة اليوم', needsConfirmation: 'بحاجة لتأكيد', nextVisit: 'الزيارة التالية',
+       todaysWorkload: 'مهام اليوم', completedAppointmentsToday: 'المواعيد المكتملة اليوم', totalAppointmentsForDate: 'إجمالي المواعيد لهذا التاريخ', completedToday: 'مكتملة اليوم', needsConfirmation: 'بحاجة لتأكيد', nextVisit: 'الزيارة التالية',
       confirmCancellation: 'تأكيد الإلغاء', cancelBookingWarning: 'سيتم إلغاء هذا الحجز وإخلاء الوقت.',
       bookingUpdated: 'تم تحديث الحجز.', bookingCompleted: 'تم إكمال الحجز ونقله إلى الأرشيف.', bookingUpdateError: 'تعذر تحديث الحجز. تحقق من البيانات وحاول مرة أخرى.',
       created: 'تاريخ الإنشاء',

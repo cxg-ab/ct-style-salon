@@ -943,7 +943,25 @@ router.post("/appointments", async (req, res): Promise<void> => {
     notes: req.body?.notes ?? null,
   });
   if (!body.success) {
-    res.status(400).json({ error: "Check your booking details and try again." });
+    const invalidField = String(body.error.issues[0]?.path[0] ?? "");
+    const errorByField: Record<string, string> = {
+      customerName: "Enter a name with at least two characters.",
+      email: "Enter a valid email address.",
+      phone: "Enter a phone number with at least seven characters.",
+      serviceIds: "Choose at least one service.",
+      stylistId: "Choose an employee.",
+      date: "Choose a valid appointment date.",
+      time: "Choose an appointment time.",
+    };
+    req.log?.warn(
+      {
+        invalidFields: [...new Set(body.error.issues.map((issue) => String(issue.path[0] ?? "unknown")))],
+      },
+      "Appointment rejected because booking details failed validation",
+    );
+    res.status(400).json({
+      error: errorByField[invalidField] ?? "Check your booking details and try again.",
+    });
     return;
   }
   if (process.env.NODE_ENV !== "test" && !isWithinBookingWindow(body.data.date)) {
