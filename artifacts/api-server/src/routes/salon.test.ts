@@ -773,7 +773,7 @@ test("a booking blocks only the employee who owns that booking", async () => {
   const khaledBooking = await request("/api/appointments", {
     method: "POST",
     body: JSON.stringify({
-      serviceId: signatureCutId,
+      serviceIds: [signatureCutId],
       stylistId: marcoId,
       customerName: "Employee Scope Regression",
       email: employeeScopeEmail,
@@ -801,7 +801,7 @@ test("a booking blocks only the employee who owns that booking", async () => {
   const otherEmployeeBooking = await request("/api/appointments", {
     method: "POST",
     body: JSON.stringify({
-      serviceId: signatureCutId,
+      serviceIds: [signatureCutId],
       stylistId: aishaId,
       customerName: "Other Employee Booking",
       email: employeeScopeEmail,

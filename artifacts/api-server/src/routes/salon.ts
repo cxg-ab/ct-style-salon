@@ -1023,6 +1023,14 @@ router.post("/appointments", async (req, res): Promise<void> => {
         appointmentTimesOverlap(body.data.time, durationMinutes, existingAppointment),
       )
     ) {
+      req.log?.warn(
+        {
+          stylistId: body.data.stylistId,
+          date,
+          time: body.data.time,
+        },
+        "Appointment rejected because the selected employee has an overlapping appointment",
+      );
       res.status(400).json({ error: "That time was just booked. Please choose another slot." });
       return;
     }
