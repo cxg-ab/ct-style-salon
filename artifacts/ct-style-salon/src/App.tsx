@@ -408,6 +408,23 @@ const weekDays = [
   { value: 0, short: 'sun' },
 ];
 
+function presetBreak(openTime = '10:00', closeTime = '18:00') {
+  const [openHour, openMinute] = openTime.split(':').map(Number);
+  const [closeHour, closeMinute] = closeTime.split(':').map(Number);
+  const open = openHour * 60 + openMinute;
+  const close = closeHour * 60 + closeMinute;
+  const duration = Math.max(15, close - open);
+  const breakDuration = Math.min(60, duration);
+  const preferredStart = open + 180;
+  const start = Math.min(preferredStart, close - breakDuration);
+  const formatTime = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+  return { startTime: formatTime(start), endTime: formatTime(start + breakDuration) };
+}
+
+function scheduleWithPresetBreaks(schedule: StylistScheduleEntry[]): StylistScheduleEntry[] {
+  return schedule.map((entry) => entry.breaks === undefined ? { ...entry, breaks: [presetBreak()] } : entry);
+}
+
 function scheduleErrorMessage(
   error: unknown,
   fallback: string,
@@ -532,12 +549,27 @@ function ScheduleFields({
   const updateEntry = (dayOfWeek: number, field: 'openTime' | 'closeTime', value: string) => {
     onChange(schedule.map((entry) => entry.dayOfWeek === dayOfWeek ? { ...entry, [field]: value } : entry));
   };
+  const updateBreak = (dayOfWeek: number, breakIndex: number, field: 'startTime' | 'endTime', value: string) => {
+    onChange(schedule.map((entry) => entry.dayOfWeek === dayOfWeek
+      ? { ...entry, breaks: (entry.breaks ?? []).map((breakTime, index) => index === breakIndex ? { ...breakTime, [field]: value } : breakTime) }
+      : entry));
+  };
+  const addBreak = (dayOfWeek: number) => {
+    onChange(schedule.map((entry) => entry.dayOfWeek === dayOfWeek
+      ? { ...entry, breaks: [...(entry.breaks ?? []), presetBreak(entry.openTime, entry.closeTime)] }
+      : entry));
+  };
+  const removeBreak = (dayOfWeek: number, breakIndex: number) => {
+    onChange(schedule.map((entry) => entry.dayOfWeek === dayOfWeek
+      ? { ...entry, breaks: (entry.breaks ?? []).filter((_, index) => index !== breakIndex) }
+      : entry));
+  };
   const toggleDay = (dayOfWeek: number, enabled: boolean) => {
     if (!enabled) {
       onChange(schedule.filter((entry) => entry.dayOfWeek !== dayOfWeek));
       return;
     }
-    onChange([...schedule, { dayOfWeek, openTime: '10:00', closeTime: '18:00' }].sort((left, right) => left.dayOfWeek - right.dayOfWeek));
+    onChange([...schedule, { dayOfWeek, openTime: '10:00', closeTime: '18:00', breaks: [presetBreak()] }].sort((left, right) => left.dayOfWeek - right.dayOfWeek));
   };
 
   return (
@@ -558,6 +590,23 @@ function ScheduleFields({
                 <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">{t('close')}
                   <input type="time" value={entry.closeTime} onChange={(event) => updateEntry(day.value, 'closeTime', event.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-close-${idPrefix}-${day.short}`} />
                 </label>
+                <div className="sm:col-span-3 rounded-lg border border-[hsl(var(--border)/.75)] bg-[hsl(var(--card)/.55)] p-2.5" data-testid={`breaks-${idPrefix}-${day.short}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-mono-ui text-[9px] font-semibold uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{t('breaks')}</span>
+                    {(entry.breaks ?? []).length < 3 && <button type="button" onClick={() => addBreak(day.value)} className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--border))] px-2.5 py-1.5 text-[10px] font-bold hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-add-break-${idPrefix}-${day.short}`}><Plus size={12} /> {t('addBreak')}</button>}
+                  </div>
+                  {(entry.breaks ?? []).length === 0 ? <p className="mt-2 text-[11px] text-[hsl(var(--muted-foreground))]">{t('noBreaks')}</p> : (
+                    <div className="mt-2 space-y-2">
+                      {(entry.breaks ?? []).map((breakTime, breakIndex) => (
+                        <div key={`${day.value}-${breakIndex}`} className="flex flex-wrap items-center gap-2" data-testid={`break-row-${idPrefix}-${day.short}-${breakIndex}`}>
+                          <label className="flex min-w-[130px] flex-1 items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">{t('breakStart')}<input type="time" value={breakTime.startTime} onChange={(event) => updateBreak(day.value, breakIndex, 'startTime', event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-2 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-break-start-${idPrefix}-${day.short}-${breakIndex}`} /></label>
+                          <label className="flex min-w-[130px] flex-1 items-center gap-2 text-[10px] font-semibold uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]">{t('breakEnd')}<input type="time" value={breakTime.endTime} onChange={(event) => updateBreak(day.value, breakIndex, 'endTime', event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-2 text-sm font-normal normal-case tracking-normal text-[hsl(var(--foreground))]" data-testid={`input-break-end-${idPrefix}-${day.short}-${breakIndex}`} /></label>
+                          <button type="button" onClick={() => removeBreak(day.value, breakIndex)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--destructive))] hover:text-[hsl(var(--destructive))]" aria-label={t('removeBreak')} data-testid={`button-remove-break-${idPrefix}-${day.short}-${breakIndex}`}><Trash2 size={14} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </>
             ) : <span className="font-mono-ui text-[10px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))] sm:col-span-2">{t('dayOff')}</span>}
           </div>
@@ -569,14 +618,14 @@ function ScheduleFields({
 function ScheduleEditor({ stylist, embedded = false }: { stylist: Stylist; embedded?: boolean }) {
   const { t, weekday, stylistCopy } = useLocale();
   const displayedStylist = stylistCopy(stylist);
-  const [schedule, setSchedule] = useState<StylistScheduleEntry[]>(stylist.schedule);
+  const [schedule, setSchedule] = useState<StylistScheduleEntry[]>(() => scheduleWithPresetBreaks(stylist.schedule));
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string }>();
   const [expanded, setExpanded] = useState(false);
   const updateSchedule = useUpdateStylistSchedule({
   });
 
   useEffect(() => {
-    setSchedule(stylist.schedule);
+    setSchedule(scheduleWithPresetBreaks(stylist.schedule));
   }, [stylist.id, stylist.schedule]);
 
   const entryForDay = (dayOfWeek: number) => schedule.find((entry) => entry.dayOfWeek === dayOfWeek);
@@ -606,7 +655,7 @@ function ScheduleEditor({ stylist, embedded = false }: { stylist: Stylist; embed
     setFeedback(undefined);
     setSchedule((current) => {
       if (!enabled) return current.filter((entry) => entry.dayOfWeek !== dayOfWeek);
-      return [...current, { dayOfWeek, openTime: '10:00', closeTime: '18:00', breaks: [] }].sort((left, right) => left.dayOfWeek - right.dayOfWeek);
+      return [...current, { dayOfWeek, openTime: '10:00', closeTime: '18:00', breaks: [presetBreak()] }].sort((left, right) => left.dayOfWeek - right.dayOfWeek);
     });
   };
   const save = () => {
@@ -2087,11 +2136,11 @@ function App() {
 export default App;
 
 const defaultEmployeeSchedule: StylistScheduleEntry[] = [
-  { dayOfWeek: 1, openTime: '10:00', closeTime: '18:00' },
-  { dayOfWeek: 2, openTime: '10:00', closeTime: '18:00' },
-  { dayOfWeek: 3, openTime: '10:00', closeTime: '18:00' },
-  { dayOfWeek: 4, openTime: '10:00', closeTime: '18:00' },
-  { dayOfWeek: 5, openTime: '10:00', closeTime: '18:00' },
+  { dayOfWeek: 1, openTime: '10:00', closeTime: '18:00', breaks: [presetBreak()] },
+  { dayOfWeek: 2, openTime: '10:00', closeTime: '18:00', breaks: [presetBreak()] },
+  { dayOfWeek: 3, openTime: '10:00', closeTime: '18:00', breaks: [presetBreak()] },
+  { dayOfWeek: 4, openTime: '10:00', closeTime: '18:00', breaks: [presetBreak()] },
+  { dayOfWeek: 5, openTime: '10:00', closeTime: '18:00', breaks: [presetBreak()] },
 ];
 
 const emptyEmployeeForm: EmployeeFormState = {
@@ -2112,7 +2161,7 @@ function employeeToForm(stylist: Stylist): EmployeeFormState {
     initials: stylist.initials,
     accent: stylist.accent,
     photoUrl: stylist.photoUrl ?? '',
-    schedule: stylist.schedule,
+    schedule: scheduleWithPresetBreaks(stylist.schedule),
   };
 }
 
