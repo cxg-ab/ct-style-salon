@@ -58,3 +58,9 @@ The manager workspace now includes:
 - English and Arabic labels for the new manager availability and schedule controls.
 
 The latest source and generated client changes are verified with the salon frontend typecheck and production build. The API and web workflows are running cleanly; the only browser warning is Clerk’s expected development-key notice.
+
+## Current GitHub handoff
+
+Local `main` contains the final verified source, project notes, and memory update. It also contains a non-destructive merge commit that preserves the existing GitHub `main` history, so a normal push will fast-forward once Git authentication is available.
+
+The current environment cannot complete that push: direct Git HTTPS/SSH authentication is unavailable, and the installed GitHub connector’s Cloudflare edge blocks the nested Git Data writes required for a complete repository sync. The remote branch was verified unchanged rather than partially updated.
