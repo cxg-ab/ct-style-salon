@@ -189,7 +189,6 @@ export const ListStylistsResponse = zod.array(ListStylistsResponseItem)
  */
 
 
-
 export const createStylistBodyInitialsMax = 5;
 
 
@@ -209,8 +208,8 @@ export const createStylistBodyScheduleMax = 21;
 export const CreateStylistBody = zod.object({
   "name": zod.string().min(1),
   "role": zod.string().min(1),
-  "bio": zod.string().min(1),
-  "initials": zod.string().min(1).max(createStylistBodyInitialsMax),
+  "bio": zod.string().optional(),
+  "initials": zod.string().max(createStylistBodyInitialsMax).optional(),
   "accent": zod.string().min(1),
   "photoUrl": zod.string().nullish(),
   "schedule": zod.array(zod.object({
@@ -265,7 +264,6 @@ export const UpdateStylistParams = zod.object({
 
 
 
-
 export const updateStylistBodyInitialsMax = 5;
 
 
@@ -285,8 +283,8 @@ export const updateStylistBodyScheduleMax = 21;
 export const UpdateStylistBody = zod.object({
   "name": zod.string().min(1),
   "role": zod.string().min(1),
-  "bio": zod.string().min(1),
-  "initials": zod.string().min(1).max(updateStylistBodyInitialsMax),
+  "bio": zod.string().optional(),
+  "initials": zod.string().max(updateStylistBodyInitialsMax).optional(),
   "accent": zod.string().min(1),
   "photoUrl": zod.string().nullish(),
   "schedule": zod.array(zod.object({

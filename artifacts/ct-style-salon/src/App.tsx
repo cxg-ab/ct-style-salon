@@ -314,8 +314,23 @@ function Home() {
       <section className="mx-auto max-w-[1240px] px-5 py-20 sm:px-8 md:py-28">
          <div className="flex flex-col justify-between gap-8 md:flex-row md:items-end"><div><p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('thePeople')}</p><h2 className="mt-3 font-display text-5xl leading-none sm:text-6xl">{t('goodHands')}</h2></div><p className="max-w-sm text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('peopleIntro')}</p></div>
          {stylistsQuery.isLoading ? <div className="mt-10"><LoadingCards count={3} /></div> : stylistsQuery.isError ? <div className="mt-10"><ErrorMessage retry={() => stylistsQuery.refetch()} /></div> : displayedStylists.length === 0 ? <div className="mt-10 rounded-2xl border border-dashed border-[hsl(var(--border))] p-12 text-center text-sm text-[hsl(var(--muted-foreground))]" data-testid="empty-stylists">{t('teamOnWay')}</div> : (
-           <div className="mt-10 grid gap-4 sm:grid-cols-2 md:grid-cols-3">{displayedStylists.map((stylist) => <div key={stylist.id} className="group rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 transition-transform hover:-translate-y-1" data-testid={`card-stylist-${stylist.id}`}><div className="mb-12 flex items-start justify-between"><StylistAvatar stylist={stylist} className="h-14 w-14" /><span className="font-mono-ui text-[10px] text-[hsl(var(--muted-foreground))]">0{stylist.id}</span></div><p className="font-mono-ui text-[10px] uppercase tracking-[.15em] text-[hsl(var(--primary))]">{stylist.role}</p><h3 className="mt-2 font-display text-3xl">{stylist.name}</h3><p className="mt-3 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p></div>)}</div>
-        )}
+           <div className="people-marquee mt-10" data-testid="people-marquee">
+             <div className="people-marquee-track">
+               {[0, 1].map((copy) => (
+                 <div key={copy} className="people-marquee-group" aria-hidden={copy === 1 ? true : undefined}>
+                   {displayedStylists.map((stylist) => (
+                     <article key={`${copy}-${stylist.id}`} className="people-marquee-card group rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 transition-transform hover:-translate-y-1" data-testid={copy === 0 ? `card-stylist-${stylist.id}` : undefined}>
+                       <div className="mb-12 flex items-start justify-between"><StylistAvatar stylist={stylist} className="h-14 w-14" /><span className="font-mono-ui text-[10px] text-[hsl(var(--muted-foreground))]">0{stylist.id}</span></div>
+                       <p className="font-mono-ui text-[10px] uppercase tracking-[.15em] text-[hsl(var(--primary))]">{stylist.role}</p>
+                       <h3 className="mt-2 font-display text-3xl">{stylist.name}</h3>
+                       {stylist.bio && <p className="mt-3 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p>}
+                     </article>
+                   ))}
+                 </div>
+               ))}
+             </div>
+           </div>
+         )}
       </section>
        <div className="mx-auto max-w-[1240px] px-5 pb-10 text-right font-mono-ui text-[9px] tracking-[.12em] text-[hsl(var(--muted-foreground))] sm:px-8" data-testid="status-health">{t('studioStatus')} · {healthQuery.data?.status ?? (healthQuery.isLoading ? t('checking') : t('available'))}</div>
     </main>
@@ -398,7 +413,16 @@ function StylistAvatar({ stylist, className = 'h-12 w-12', alt }: { stylist: Sty
   if (photoSource && !imageFailed) {
     return <img src={photoSource} alt={alt ?? stylist.name} className={`${className} rounded-full object-cover`} onError={() => setImageFailed(true)} />;
   }
-  return <span className={`${className} grid place-items-center rounded-full text-sm font-bold`} style={{ backgroundColor: `${stylist.accent}25`, color: stylist.accent }} aria-label={alt ?? stylist.name}>{stylist.initials}</span>;
+  return <span className={`${className} grid place-items-center rounded-full text-sm font-bold`} style={{ backgroundColor: `${stylist.accent}25`, color: stylist.accent }} aria-label={alt ?? stylist.name}>{stylistInitials(stylist)}</span>;
+}
+
+function stylistInitials(stylist: Stylist) {
+  const initials = stylist.initials.trim();
+  if (initials) return initials;
+  const nameParts = stylist.name.trim().split(/\s+/).filter(Boolean);
+  return nameParts.length > 1
+    ? nameParts.map((part) => part[0]).join('').slice(0, 2).toUpperCase()
+    : nameParts[0]?.slice(0, 2).toUpperCase() || '?';
 }
 
 function stylistPhotoSource(photoUrl?: string | null): string | undefined {
@@ -839,6 +863,47 @@ function ServiceManagement() {
   );
 }
 
+function EmployeeCard({
+  stylist,
+  isEditing,
+  isRemoving,
+  onEdit,
+  onRemove,
+  onCancel,
+  onSaved,
+}: {
+  stylist: Stylist;
+  isEditing: boolean;
+  isRemoving: boolean;
+  onEdit: () => void;
+  onRemove: () => void;
+  onCancel: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const { t } = useLocale();
+
+  return (
+    <article className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`employee-card-${stylist.id}`}>
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 items-start gap-4">
+          <StylistAvatar stylist={stylist} className="h-12 w-12 shrink-0" alt={`${stylist.name} ${t('profilePhoto')}`} />
+          <div className="min-w-0">
+            <h3 className="font-display text-2xl">{stylist.name}</h3>
+            <p className="mt-0.5 font-mono-ui text-[10px] uppercase tracking-[.14em] text-[hsl(var(--primary))]">{stylist.role}</p>
+            {stylist.bio && <p className="mt-2 max-w-xl text-xs leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p>}
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button type="button" onClick={onEdit} className="inline-flex items-center justify-center gap-2 rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.1em] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-edit-employee-${stylist.id}`}><Pencil size={14} /> {t('editEmployee')}</button>
+          <button type="button" onClick={onRemove} disabled={isRemoving} className="inline-flex items-center justify-center gap-2 rounded-full border border-[hsl(var(--destructive)/.35)] px-4 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.06)] disabled:opacity-60" data-testid={`button-remove-employee-${stylist.id}`}><Trash2 size={14} /> {t('removeEmployee')}</button>
+        </div>
+      </div>
+      {isEditing && <EmployeeProfileEditor stylist={stylist} onCancel={onCancel} onSaved={onSaved} />}
+      {!isEditing && <ScheduleEditor stylist={stylist} embedded />}
+    </article>
+  );
+}
+
 function ManagerSchedule() {
   const { t } = useLocale();
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
@@ -901,23 +966,19 @@ function ManagerSchedule() {
          <div id="employee-roster-details" hidden={!rosterExpanded}>
         {feedback && <p className="mt-5 text-sm text-[hsl(var(--secondary))]" role="status" data-testid="status-employee-success">{feedback}</p>}
         {editing === 'new' && <EmployeeProfileEditor onCancel={() => setEditing(null)} onSaved={finishSave} />}
-         <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-3">
           {stylistsQuery.isLoading ? <LoadingCards count={3} /> : stylistsQuery.isError ? <ErrorMessage retry={() => stylistsQuery.refetch()} /> : stylists.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-12 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noEmployees')}</div> : null}
           {stylists.map((stylist) => (
-             <div key={`profile-${stylist.id}`} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`employee-card-${stylist.id}`}>
-               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                <div className="flex min-w-0 items-start gap-4">
-                   <StylistAvatar stylist={stylist} className="h-12 w-12 shrink-0" alt={`${stylist.name} ${t('profilePhoto')}`} />
-                   <div className="min-w-0"><h3 className="font-display text-2xl">{stylist.name}</h3><p className="mt-0.5 font-mono-ui text-[10px] uppercase tracking-[.14em] text-[hsl(var(--primary))]">{stylist.role}</p><p className="mt-2 max-w-xl text-xs leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p></div>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <button type="button" onClick={() => { setEditing(stylist.id); setFeedback(undefined); }} className="inline-flex items-center justify-center gap-2 rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.1em] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-edit-employee-${stylist.id}`}><Pencil size={14} /> {t('editEmployee')}</button>
-                  <button type="button" onClick={() => removeEmployee(stylist)} disabled={deleteStylist.isPending} className="inline-flex items-center justify-center gap-2 rounded-full border border-[hsl(var(--destructive)/.35)] px-4 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.06)] disabled:opacity-60" data-testid={`button-remove-employee-${stylist.id}`}><Trash2 size={14} /> {t('removeEmployee')}</button>
-                </div>
-              </div>
-              {editing === stylist.id && <EmployeeProfileEditor stylist={stylist} onCancel={() => setEditing(null)} onSaved={finishSave} />}
-              {editing !== stylist.id && <ScheduleEditor stylist={stylist} embedded />}
-            </div>
+              <EmployeeCard
+                key={`profile-${stylist.id}`}
+                stylist={stylist}
+                isEditing={editing === stylist.id}
+                isRemoving={deleteStylist.isPending}
+                onEdit={() => { setEditing(stylist.id); setFeedback(undefined); }}
+                onRemove={() => removeEmployee(stylist)}
+                onCancel={() => setEditing(null)}
+                onSaved={finishSave}
+              />
           ))}
         </div>
          </div>
@@ -1253,7 +1314,7 @@ function EmployeeProfileEditor({
       photoUrl: form.photoUrl.trim() || null,
       schedule: form.schedule,
     };
-    if (!data.name || !data.role || !data.bio || !data.initials || !data.accent) {
+    if (!data.name || !data.role || !data.accent) {
       setFeedback(t('employeeRequired'));
       return;
     }
@@ -1298,8 +1359,8 @@ function EmployeeProfileEditor({
         <label className="text-xs font-semibold">{t('jobTitle')}
           <input required value={form.role} onChange={(event) => updateField('role', event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-employee-role" />
         </label>
-        <label className="text-xs font-semibold">{t('initials')}
-          <input required maxLength={5} value={form.initials} onChange={(event) => updateField('initials', event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal uppercase" data-testid="input-employee-initials" />
+        <label className="text-xs font-semibold">{t('initials')} <span className="font-normal text-[hsl(var(--muted-foreground))]">({t('optional')})</span>
+          <input maxLength={5} value={form.initials} onChange={(event) => updateField('initials', event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal uppercase" data-testid="input-employee-initials" />
         </label>
         <label className="text-xs font-semibold">{t('accent')}
           <input required value={form.accent} onChange={(event) => updateField('accent', event.target.value)} className="mt-2 h-11 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-employee-accent" />
@@ -1316,8 +1377,8 @@ function EmployeeProfileEditor({
           {photoUpload.status === 'uploading' && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[hsl(var(--muted))]" role="progressbar" aria-label={`${t('uploading')} ${photoUpload.progress}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={photoUpload.progress} data-testid="employee-photo-upload-progress"><div className="h-full bg-[hsl(var(--primary))] transition-all" style={{ width: `${photoUpload.progress}%` }} /></div>}
           {photoUpload.status === 'success' && <p className="mt-2 text-[11px] text-[hsl(var(--secondary))]" role="status" data-testid="status-employee-photo-success">{t('photoUploadComplete')}</p>}
         </div>
-        <label className="text-xs font-semibold sm:col-span-2">{t('description')}
-          <textarea required value={form.bio} onChange={(event) => updateField('bio', event.target.value)} rows={3} className="mt-2 w-full resize-y rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 py-3 text-sm font-normal" data-testid="input-employee-bio" />
+        <label className="text-xs font-semibold sm:col-span-2">{t('description')} <span className="font-normal text-[hsl(var(--muted-foreground))]">({t('optional')})</span>
+          <textarea value={form.bio} onChange={(event) => updateField('bio', event.target.value)} rows={3} className="mt-2 w-full resize-y rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 py-3 text-sm font-normal" data-testid="input-employee-bio" />
         </label>
       </div>
       <div className="mt-7">

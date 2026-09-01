@@ -12,13 +12,9 @@ export interface StylistInput {
   name: string;
   /** @minLength 1 */
   role: string;
-  /** @minLength 1 */
-  bio: string;
-  /**
-     * @minLength 1
-     * @maxLength 5
-     */
-  initials: string;
+  bio?: string;
+  /** @maxLength 5 */
+  initials?: string;
   /** @minLength 1 */
   accent: string;
   photoUrl?: string | null;

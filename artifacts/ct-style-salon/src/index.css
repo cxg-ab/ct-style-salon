@@ -301,6 +301,40 @@ body {
     radial-gradient(circle at 11% 3%, hsl(43 73% 63% / .12), transparent 25rem),
     hsl(var(--background));
 }
+.people-marquee {
+  position: relative;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+}
+.people-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: people-marquee-scroll 36s linear infinite;
+}
+.people-marquee:hover .people-marquee-track,
+.people-marquee:focus-within .people-marquee-track {
+  animation-play-state: paused;
+}
+.people-marquee-group {
+  display: flex;
+  flex-shrink: 0;
+  gap: 1rem;
+  padding-right: 1rem;
+}
+.people-marquee-card {
+  width: min(78vw, 330px);
+}
+@keyframes people-marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .people-marquee-track {
+    animation: none;
+    transform: translateX(0);
+  }
+}
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid hsl(var(--accent) / .85);

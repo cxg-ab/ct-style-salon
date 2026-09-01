@@ -310,8 +310,8 @@ async function cleanupReplacedPhoto(
 function validateStylistPayload(payload: {
   name: string;
   role: string;
-  bio: string;
-  initials: string;
+  bio?: string;
+  initials?: string;
   accent: string;
   photoUrl?: string | null;
   schedule: StylistScheduleEntry[];
@@ -319,13 +319,11 @@ function validateStylistPayload(payload: {
   if (
     !payload.name.trim() ||
     !payload.role.trim() ||
-    !payload.bio.trim() ||
-    !payload.initials.trim() ||
     !payload.accent.trim()
   ) {
-    return "Name, job title, description, initials, and accent are required.";
+    return "Name, job title, and accent are required.";
   }
-  if (payload.initials.trim().length > 5) {
+  if ((payload.initials ?? "").trim().length > 5) {
     return "Initials must be five characters or fewer.";
   }
   if (payload.photoUrl) {
@@ -548,8 +546,8 @@ router.post("/stylists", async (req, res): Promise<void> => {
     .values({
       name: body.data.name.trim(),
       role: body.data.role.trim(),
-      bio: body.data.bio.trim(),
-      initials: body.data.initials.trim().toUpperCase(),
+      bio: (body.data.bio ?? "").trim(),
+      initials: (body.data.initials ?? "").trim().toUpperCase(),
       accent: body.data.accent.trim(),
       photoUrl: storedPhotoPath(body.data.photoUrl?.trim()),
       schedule: body.data.schedule,
@@ -634,8 +632,8 @@ router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
     .set({
       name: body.data.name.trim(),
       role: body.data.role.trim(),
-      bio: body.data.bio.trim(),
-      initials: body.data.initials.trim().toUpperCase(),
+      bio: (body.data.bio ?? "").trim(),
+      initials: (body.data.initials ?? "").trim().toUpperCase(),
       accent: body.data.accent.trim(),
       photoUrl: nextPhotoUrl,
       schedule: body.data.schedule,

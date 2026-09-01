@@ -6,7 +6,7 @@ export type Locale = 'en' | 'ar';
 type MessageKey =
   | 'theSalon' | 'bookVisit' | 'yourAppointments' | 'reserveChair' | 'closeMenu' | 'openMenu'
   | 'findUs' | 'stayInTouch' | 'dailyHours' | 'managerWorkspace' | 'managerWorkspaceShort'
-  | 'salonDescription' | 'goodHairFeeling' | 'findYourTime' | 'exploreServices' | 'guestNotes'
+   | 'salonDescription' | 'goodHairFeeling' | 'findYourTime' | 'exploreServices'
   | 'khalifaCity' | 'sundayOpen' | 'theMenu' | 'littleRitual' | 'serviceIntro'
   | 'makeItYours' | 'yourChairWaiting' | 'chooseServicePerson' | 'bookAppointment'
   | 'thePeople' | 'goodHands' | 'peopleIntro' | 'studioStatus' | 'checking' | 'available'
@@ -51,7 +51,7 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     managerWorkspace: 'Manager workspace', managerWorkspaceShort: 'Manager',
     salonDescription: 'A considered cut, a warm welcome, and a little time that belongs entirely to you.',
     goodHairFeeling: 'Good hair is a feeling.', findYourTime: 'Find your time',
-    exploreServices: 'Explore services', guestNotes: 'guest notes', khalifaCity: 'Khalifa City · Abu Dhabi',
+     exploreServices: 'Explore services', khalifaCity: 'Khalifa City · Abu Dhabi',
     sundayOpen: 'Sunday open until 11 PM', theMenu: 'The menu', littleRitual: 'A little ritual.',
     serviceIntro: 'Every service starts with a conversation, and ends with you feeling like yourself — only more so.',
     makeItYours: 'Make it yours', yourChairWaiting: 'Your chair is waiting.',
@@ -80,7 +80,7 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     employeeIntro: 'Keep your people list, profiles, and working hours up to date.',
     addEmployee: 'Add employee', newEmployee: 'New employee', editEmployee: 'Edit employee', removeEmployee: 'Remove employee',
     removeEmployeeConfirm: 'Remove this employee from booking and the active roster?',
-    employeeRequired: 'Name, job title, description, initials, and accent are required.',
+     employeeRequired: 'Name, job title, and accent are required.',
     initialsTooLong: 'Initials must be five characters or fewer.',
     workingSchedule: 'Working schedule', saveEmployee: 'Save employee',
     employeeSaveError: 'We could not save this employee. Check the details and try again.',
@@ -147,7 +147,7 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     managerWorkspace: 'مساحة الإدارة', managerWorkspaceShort: 'الإدارة',
     salonDescription: 'قصة شعر متقنة، ترحيب دافئ، ووقت قصير لك وحدك.',
     goodHairFeeling: 'الشعر الجميل إحساس.', findYourTime: 'اعثر على وقتك',
-    exploreServices: 'استكشف الخدمات', guestNotes: 'ملاحظة من الضيوف', khalifaCity: 'مدينة خليفة · أبوظبي',
+     exploreServices: 'استكشف الخدمات', khalifaCity: 'مدينة خليفة · أبوظبي',
     sundayOpen: 'مفتوح الأحد حتى 11 مساءً', theMenu: 'قائمة الخدمات', littleRitual: 'طقس صغير.',
     serviceIntro: 'كل خدمة تبدأ بحوار وتنتهي بشعور يشبهك — لكن بصورة أجمل.',
     makeItYours: 'اجعلها تجربتك', yourChairWaiting: 'مقعدك بانتظارك.',
@@ -176,7 +176,7 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     employeeIntro: 'حافظ على قائمة فريقك وملفاتهم وساعات عملهم محدثة.',
     addEmployee: 'إضافة موظف', newEmployee: 'موظف جديد', editEmployee: 'تعديل الموظف', removeEmployee: 'إزالة الموظف',
     removeEmployeeConfirm: 'إزالة هذا الموظف من الحجوزات والقائمة النشطة؟',
-    employeeRequired: 'الاسم والمسمى والوصف والأحرف الأولى واللون مطلوبة.',
+     employeeRequired: 'الاسم والمسمى واللون مطلوبة.',
     initialsTooLong: 'يجب ألا تتجاوز الأحرف الأولى خمسة أحرف.',
     workingSchedule: 'جدول العمل', saveEmployee: 'حفظ الموظف',
     employeeSaveError: 'تعذر حفظ الموظف. تحقق من البيانات وحاول مرة أخرى.',
