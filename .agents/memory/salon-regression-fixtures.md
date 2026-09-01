@@ -7,4 +7,6 @@ Salon API regression tests should discover services and stylists from the live A
 
 **Why:** Replit workspaces can retain valid menu and roster edits that differ from the source seed. Tests that hardcode those seed assumptions can report false failures while the booking logic is correct.
 
-**How to apply:** Use stable service characteristics or discovered records, calculate expected bundle totals from the returned service data, and isolate temporary schedule/appointment changes with cleanup.
+**How to apply:** Use stable service characteristics or discovered records, calculate expected bundle totals from the returned service data, isolate temporary schedule/appointment changes with cleanup, and run the DB-mutating suite as one process rather than concurrently.
+
+The API regression suite shares persisted appointment and schedule state. Running another DB-mutating validation at the same time can consume a slot before the assertion that expects it to be available, producing an order-dependent failure.
