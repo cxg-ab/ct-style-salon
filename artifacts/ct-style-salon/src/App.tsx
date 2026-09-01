@@ -1313,7 +1313,7 @@ function ManagerRoute() {
     );
   }
 
-  if (user?.publicMetadata.role !== 'manager') {
+  if (user?.publicMetadata?.role !== 'manager') {
     return (
       <main className="mx-auto flex min-h-[calc(100dvh-76px)] max-w-[760px] items-center px-5 py-16 sm:px-8">
         <div className="w-full rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 sm:p-12" data-testid="manager-access-denied">
