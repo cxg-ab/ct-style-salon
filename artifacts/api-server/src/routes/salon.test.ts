@@ -16,6 +16,7 @@ import { ObjectStorageService } from "../lib/objectStorage";
 const testDate = "2099-09-07";
 const testEmail = "schedule-regression@example.com";
 const bundleEmail = "bundle-regression@example.com";
+const managerEditEmail = "manager-edit-regression@example.com";
 const lifecycleEmail = "stylist-lifecycle@example.com";
 const serviceTestName = "Automated Service Regression";
 const managerHeaders = { "x-salon-manager": "true" };
@@ -130,6 +131,7 @@ before(async () => {
 
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, testEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, bundleEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, managerEditEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, lifecycleEmail));
   if (createdStylistId) {
     await db.delete(stylistsTable).where(eq(stylistsTable.id, createdStylistId));
@@ -179,6 +181,7 @@ after(async () => {
   }
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, testEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, bundleEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, managerEditEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, lifecycleEmail));
   if (createdServiceId) {
     await db.delete(servicesTable).where(eq(servicesTable.id, createdServiceId));
@@ -942,6 +945,118 @@ test("service bundles use combined availability, persist as one appointment, and
   assert.deepEqual(history.body[0]?.serviceNames, ["Signature Cut", "Beard Ritual"]);
   assert.equal(history.body[0]?.totalDurationMinutes, bundleDurationMinutes);
   assert.equal(history.body[0]?.totalPrice, bundleTotalPrice);
+});
+
+test("manager appointment edits enforce access and completed bookings release the slot", async () => {
+  await updateSchedule(aishaId, scheduleWithMonday("10:00", "18:00"));
+  await updateSchedule(marcoId, scheduleWithMonday("10:00", "18:00"));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, managerEditEmail));
+
+  const sourceAvailability = await request<Array<{ slots: string[] }>>(
+    `/api/availability?date=2099-09-14&stylistId=${aishaId}&serviceIds=${signatureCutId}`,
+  );
+  const sourceTime = sourceAvailability.body[0]?.slots[0];
+  assert.ok(sourceTime);
+
+  const created = await request<{ id: number }>("/api/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      serviceIds: [signatureCutId],
+      stylistId: aishaId,
+      customerName: "Manager Edit Regression",
+      email: managerEditEmail,
+      phone: "+971500000001",
+      date: "2099-09-14",
+      time: sourceTime,
+    }),
+  });
+  assert.equal(created.response.status, 201);
+  const appointmentId = created.body.id;
+
+  const unauthorized = await request<{ error: string }>(
+    `/api/manager/appointments/${appointmentId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ status: "completed" }),
+    },
+  );
+  assert.equal(unauthorized.response.status, 401);
+
+  const forbidden = await request<{ error: string }>(
+    `/api/manager/appointments/${appointmentId}`,
+    {
+      method: "PATCH",
+      headers: { "x-salon-user": "true" },
+      body: JSON.stringify({ status: "completed" }),
+    },
+  );
+  assert.equal(forbidden.response.status, 403);
+
+  const completed = await request<{
+    id: number;
+    status: string;
+  }>(`/api/manager/appointments/${appointmentId}`, {
+    method: "PATCH",
+    headers: managerHeaders,
+    body: JSON.stringify({ status: "completed" }),
+  });
+  assert.equal(completed.response.status, 200);
+  assert.equal(completed.body.status, "completed");
+
+  const availability = await request<Array<{ slots: string[] }>>(
+    `/api/availability?date=2099-09-14&stylistId=${marcoId}&serviceIds=${beardRitualId}`,
+  );
+  assert.equal(availability.response.status, 200);
+  const targetTime = availability.body[0]?.slots[0];
+  assert.ok(targetTime);
+
+  const reassigned = await request<{
+    customerName: string;
+    email: string;
+    phone: string;
+    stylistId: number;
+    serviceIds: number[];
+    time: string;
+    status: string;
+  }>(`/api/manager/appointments/${appointmentId}`, {
+    method: "PATCH",
+    headers: managerHeaders,
+    body: JSON.stringify({
+      customerName: "Manager Edited Guest",
+      email: "manager-edited@example.com",
+      phone: "+971501234567",
+      stylistId: marcoId,
+      serviceIds: [beardRitualId],
+      date: "2099-09-14",
+      time: targetTime,
+      status: "confirmed",
+    }),
+  });
+  assert.equal(reassigned.response.status, 200);
+  assert.equal(reassigned.body.customerName, "Manager Edited Guest");
+  assert.equal(reassigned.body.email, "manager-edited@example.com");
+  assert.equal(reassigned.body.phone, "+971501234567");
+  assert.equal(reassigned.body.stylistId, marcoId);
+  assert.deepEqual(reassigned.body.serviceIds, [beardRitualId]);
+  assert.equal(reassigned.body.time, targetTime);
+  assert.equal(reassigned.body.status, "confirmed");
+
+  const done = await request<{ status: string }>(
+    `/api/manager/appointments/${appointmentId}`,
+    {
+      method: "PATCH",
+      headers: managerHeaders,
+      body: JSON.stringify({ status: "completed" }),
+    },
+  );
+  assert.equal(done.response.status, 200);
+  assert.equal(done.body.status, "completed");
+
+  const released = await request<Array<{ slots: string[] }>>(
+    `/api/availability?date=2099-09-14&stylistId=${marcoId}&serviceIds=${beardRitualId}`,
+  );
+  assert.equal(released.response.status, 200);
+  assert.ok(released.body[0]?.slots.includes(targetTime));
 });
 
 test("services referenced by appointments cannot be deleted", async () => {

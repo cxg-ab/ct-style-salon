@@ -13,7 +13,7 @@ import * as zod from 'zod';
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
-  "status": zod.string()
+  "status": zod.enum(['ok'])
 })
 
 
@@ -649,6 +649,63 @@ export const ListManagerAppointmentsResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListManagerAppointmentsResponse = zod.array(ListManagerAppointmentsResponseItem)
+
+
+/**
+ * @summary Update any salon appointment as a manager
+ */
+export const UpdateManagerAppointmentParams = zod.object({
+  "appointmentId": zod.coerce.number().int()
+})
+
+
+export const updateManagerAppointmentBodyServiceIdsMax = 10;
+
+
+export const updateManagerAppointmentBodyCustomerNameMin = 2;
+
+export const updateManagerAppointmentBodyPhoneMin = 7;
+
+
+
+export const UpdateManagerAppointmentBody = zod.object({
+  "serviceIds": zod.array(zod.int().min(1)).min(1).max(updateManagerAppointmentBodyServiceIdsMax).optional(),
+  "stylistId": zod.int().min(1).optional(),
+  "customerName": zod.string().min(updateManagerAppointmentBodyCustomerNameMin).optional(),
+  "email": zod.email().optional(),
+  "phone": zod.string().min(updateManagerAppointmentBodyPhoneMin).optional(),
+  "date": zod.coerce.date().optional(),
+  "time": zod.string().optional(),
+  "notes": zod.string().nullish(),
+  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed']).optional()
+})
+
+
+
+
+export const updateManagerAppointmentResponseTotalPriceMin = 0;
+
+
+
+export const UpdateManagerAppointmentResponse = zod.object({
+  "id": zod.int(),
+  "serviceId": zod.int().describe('First service in the bundle, retained for backwards compatibility.'),
+  "serviceIds": zod.array(zod.int()).min(1),
+  "serviceNames": zod.array(zod.string()).min(1),
+  "serviceName": zod.string().describe('Comma-separated service names, retained for backwards compatibility.'),
+  "totalDurationMinutes": zod.int().min(1),
+  "totalPrice": zod.number().min(updateManagerAppointmentResponseTotalPriceMin),
+  "stylistId": zod.int(),
+  "stylistName": zod.string(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "date": zod.coerce.date(),
+  "time": zod.string(),
+  "notes": zod.string().nullable(),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date()
+})
 
 
 /**

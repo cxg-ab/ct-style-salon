@@ -586,6 +586,56 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Appointment"
+  /manager/appointments/{appointmentId}:
+    patch:
+      operationId: updateManagerAppointment
+      tags: [salon]
+      summary: Update any salon appointment as a manager
+      security:
+        - SalonManager: []
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManagerAppointmentUpdate"
+      responses:
+        "200":
+          description: Updated appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          description: Invalid appointment details or unavailable time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Manager access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Appointment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /manager/customers:
     get:
       operationId: listManagerCustomers
@@ -621,6 +671,7 @@ components:
       properties:
         status:
           type: string
+          enum: [ok]
       required:
         - status
     UploadUrlRequest:
@@ -1002,6 +1053,40 @@ components:
       required:
         - date
         - time
+    ManagerAppointmentUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        serviceIds:
+          type: array
+          minItems: 1
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+        stylistId:
+          type: integer
+          minimum: 1
+        customerName:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          minLength: 7
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+        notes:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, confirmed, cancelled, completed]
     Customer:
       type: object
       properties:

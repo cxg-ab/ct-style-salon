@@ -29,6 +29,7 @@ import type {
   GetAvailabilityParams,
   HealthStatus,
   ListAppointmentsParams,
+  ManagerAppointmentUpdate,
   SalonSummary,
   Service,
   ServiceInput,
@@ -1415,6 +1416,78 @@ export function useListManagerAppointments<TData = Awaited<ReturnType<typeof lis
 
 
 
+
+export const getUpdateManagerAppointmentUrl = (appointmentId: number,) => {
+
+
+
+
+  return `/api/manager/appointments/${appointmentId}`
+}
+
+/**
+ * @summary Update any salon appointment as a manager
+ */
+export const updateManagerAppointment = async (appointmentId: number,
+    managerAppointmentUpdate: ManagerAppointmentUpdate, options?: Parameters<typeof customFetch>[1]): Promise<Appointment> => {
+
+  return customFetch<Appointment>(getUpdateManagerAppointmentUrl(appointmentId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(managerAppointmentUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateManagerAppointmentMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateManagerAppointment>>, TError,{appointmentId: number;data: BodyType<ManagerAppointmentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateManagerAppointment>>, TError,{appointmentId: number;data: BodyType<ManagerAppointmentUpdate>}, TContext> => {
+
+const mutationKey = ['updateManagerAppointment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateManagerAppointment>>, {appointmentId: number;data: BodyType<ManagerAppointmentUpdate>}> = (props) => {
+          const {appointmentId,data} = props ?? {};
+
+          return  updateManagerAppointment(appointmentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateManagerAppointmentMutationResult = NonNullable<Awaited<ReturnType<typeof updateManagerAppointment>>>
+    export type UpdateManagerAppointmentMutationBody = BodyType<ManagerAppointmentUpdate>
+    export type UpdateManagerAppointmentMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update any salon appointment as a manager
+ */
+export const useUpdateManagerAppointment = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateManagerAppointment>>, TError,{appointmentId: number;data: BodyType<ManagerAppointmentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateManagerAppointment>>,
+        TError,
+        {appointmentId: number;data: BodyType<ManagerAppointmentUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateManagerAppointmentMutationOptions(options));
+    }
 
 export const getListManagerCustomersUrl = () => {
 

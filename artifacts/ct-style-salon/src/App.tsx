@@ -5,6 +5,7 @@ import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import {
   ArrowRight,
+  Archive,
   CalendarDays,
   Check,
   ChevronDown,
@@ -52,6 +53,7 @@ import {
   useUpdateService,
   useUpdateStylist,
   useUpdateStylistSchedule,
+  useUpdateManagerAppointment,
   requestUploadUrl,
   type Service,
   type ServiceInput,
@@ -60,6 +62,7 @@ import {
   type StylistInput,
   type StylistScheduleEntry,
   type StylistUpdate,
+  type ManagerAppointmentUpdate,
 } from '@workspace/api-client-react';
 import storefrontImage from '@assets/WhatsApp_Image_2026-08-31_at_11.57.17_1788163048747.jpeg';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -962,35 +965,418 @@ function ManagerCustomers() {
   );
 }
 
+function downloadAppointmentsCsv(appointments: Appointment[], filename: string) {
+  const headers = ['Date', 'Time', 'Customer', 'Phone', 'Email', 'Stylist', 'Services', 'Status', 'Price', 'Duration', 'Notes', 'Created'];
+
+  const escapeCsv = (str: string | number | null | undefined) => {
+    if (str === null || str === undefined) return '""';
+    const s = String(str).replace(/"/g, '""');
+    return `"${s}"`;
+  };
+
+  const rows = appointments.map(a => [
+    a.date,
+    a.time,
+    a.customerName,
+    a.phone,
+    a.email,
+    a.stylistName,
+    a.serviceNames.join(', '),
+    a.status,
+    a.totalPrice,
+    a.totalDurationMinutes,
+    a.notes || '',
+    a.createdAt
+  ]);
+
+  const csvContent = [headers.map(escapeCsv).join(','), ...rows.map(row => row.map(escapeCsv).join(','))].join('\r\n');
+
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  if (link.download !== undefined) {
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+}
+
+function timeInputValue(value: string): string {
+  const match = /^(\d{1,2}):(\d{2}) (AM|PM)$/.exec(value);
+  if (!match) return value;
+  const hour = (Number(match[1]) % 12) + (match[3] === 'PM' ? 12 : 0);
+  return `${String(hour).padStart(2, '0')}:${match[2]}`;
+}
+
+function appointmentTimeValue(value: string): string {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value);
+  if (!match) return value;
+  const hour24 = Number(match[1]);
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${match[2]} ${period}`;
+}
+
+function appointmentStart(appointment: Pick<Appointment, 'date' | 'time'>): number {
+  const [year, month, day] = localIsoDate(appointment.date).split('-').map(Number);
+  const inputTime = timeInputValue(appointment.time);
+  const [hour, minute] = inputTime.split(':').map(Number);
+  return new Date(year, month - 1, day, hour, minute, 0, 0).getTime();
+}
+
+function appointmentIsArchived(appointment: Appointment, now = Date.now()): boolean {
+  return appointment.status === 'cancelled' ||
+    appointment.status === 'completed' ||
+    appointmentStart(appointment) < now;
+}
+
+function ManagerAppointmentEditor({
+  appointment,
+  onCancel,
+  onSaved,
+}: {
+  appointment: Appointment;
+  onCancel: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const { t } = useLocale();
+  const servicesQuery = useListServices({ query: { queryKey: getListServicesQueryKey() } });
+  const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
+  const services = servicesQuery.data ?? [];
+  const stylists = stylistsQuery.data ?? [];
+
+  const [form, setForm] = useState({
+    customerName: appointment.customerName,
+    email: appointment.email,
+    phone: appointment.phone,
+    stylistId: appointment.stylistId,
+    serviceIds: appointment.serviceIds,
+    date: localIsoDate(appointment.date),
+    time: appointment.time,
+    notes: appointment.notes || '',
+    status: appointment.status,
+  });
+
+  const [feedback, setFeedback] = useState<string>();
+  const updateAppointment = useUpdateManagerAppointment();
+
+  const updateField = <Key extends keyof typeof form>(field: Key, value: (typeof form)[Key]) => {
+    setFeedback(undefined);
+    setForm(f => ({ ...f, [field]: value }));
+  };
+
+  const toggleService = (id: number) => {
+    setForm(f => ({
+      ...f,
+      serviceIds: f.serviceIds.includes(id)
+        ? f.serviceIds.filter(s => s !== id)
+        : [...f.serviceIds, id]
+    }));
+  };
+
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.customerName || !form.phone || !form.date || !form.time || !form.stylistId || form.serviceIds.length === 0) {
+      setFeedback(t('errorRequired'));
+      return;
+    }
+
+    updateAppointment.mutate(
+      {
+        appointmentId: appointment.id,
+        data: {
+          customerName: form.customerName,
+          email: form.email,
+          phone: form.phone,
+          stylistId: form.stylistId,
+          serviceIds: form.serviceIds,
+          date: form.date,
+          time: form.time,
+          notes: form.notes || null,
+          status: form.status as ManagerAppointmentUpdate['status'],
+        }
+      },
+      {
+        onSuccess: () => onSaved(t('bookingUpdated')),
+        onError: () => setFeedback(t('bookingUpdateError')),
+      }
+    );
+  };
+
+  return (
+    <form onSubmit={save} className="mt-4 rounded-xl border border-[hsl(var(--primary)/.35)] bg-[hsl(var(--card))] p-4 shadow-[0_10px_24px_hsl(var(--secondary)/.05)] sm:p-5" data-testid={`appointment-editor-${appointment.id}`}>
+      <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-4 sm:flex-row sm:items-start">
+        <div>
+          <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('editBooking')}</p>
+          <h2 className="mt-1 font-display text-2xl">{appointment.customerName}</h2>
+        </div>
+        <button type="button" onClick={onCancel} className="self-start text-xs font-bold tracking-[.08em] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]" data-testid="button-cancel-appointment-edit">{t('cancel')}</button>
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+         <label className="text-xs font-semibold">{t('fullName')}
+           <input required value={form.customerName} onChange={(event) => updateField('customerName', event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-edit-name" />
+        </label>
+         <label className="text-xs font-semibold">{t('phoneNumber')}
+           <input required type="tel" value={form.phone} onChange={(event) => updateField('phone', event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-edit-phone" />
+        </label>
+         <label className="text-xs font-semibold sm:col-span-2">{t('emailAddress')}
+           <input type="email" value={form.email} onChange={(event) => updateField('email', event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-edit-email" />
+        </label>
+         <label className="text-xs font-semibold">{t('employee')}
+           <select required value={form.stylistId} onChange={(event) => updateField('stylistId', Number(event.target.value))} className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="select-edit-stylist">
+             <option value="">{t('choosePerson')}</option>
+             {stylists.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+           </select>
+        </label>
+         <label className="text-xs font-semibold">{t('status')}
+           <select required value={form.status} onChange={(event) => updateField('status', event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="select-edit-status">
+             <option value="pending">{t('pending')}</option>
+             <option value="confirmed">{t('confirmed')}</option>
+             <option value="completed">{t('completed')}</option>
+             <option value="cancelled">{t('cancelled')}</option>
+           </select>
+        </label>
+         <label className="text-xs font-semibold">{t('dateTime')}
+            <div className="mt-1.5 flex gap-2">
+              <input required type="date" value={form.date} onChange={(event) => updateField('date', event.target.value)} className="h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-edit-date" />
+               <input required type="time" value={timeInputValue(form.time)} onChange={(event) => updateField('time', appointmentTimeValue(event.target.value))} className="h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal" data-testid="input-edit-time" />
+            </div>
+         </label>
+         <label className="text-xs font-semibold sm:col-span-2">{t('service')}
+           <div className="mt-1.5 grid gap-2 rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] p-3">
+             {services.map(s => (
+               <label key={s.id} className="flex items-center gap-2 text-sm font-normal">
+                 <input type="checkbox" checked={form.serviceIds.includes(s.id)} onChange={() => toggleService(s.id)} className="h-4 w-4 accent-[hsl(var(--primary))]" data-testid={`checkbox-edit-service-${s.id}`} />
+                 {s.name}
+               </label>
+             ))}
+           </div>
+         </label>
+         <label className="text-xs font-semibold sm:col-span-2">{t('notes')}
+           <textarea value={form.notes} onChange={(event) => updateField('notes', event.target.value)} className="mt-1.5 min-h-[76px] w-full resize-y rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] p-3 text-sm font-normal" data-testid="input-edit-notes" />
+        </label>
+      </div>
+      <div className="mt-4 flex flex-col-reverse items-stretch justify-between gap-3 border-t border-[hsl(var(--border))] pt-4 sm:flex-row sm:items-center">
+         {feedback && <p className="text-sm text-[hsl(var(--destructive))]" role="alert" data-testid="status-edit-error">{feedback}</p>}
+        <button type="submit" disabled={updateAppointment.isPending} className="ml-auto inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid="button-save-appointment">
+           {updateAppointment.isPending ? t('saving') : t('saveBooking')} <Check size={14} />
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function ManagerAppointments() {
   const { t, formatDate, formatPrice, statusLabel, translateServiceName } = useLocale();
   const appointmentsQuery = useListManagerAppointments({ query: { queryKey: getListManagerAppointmentsQueryKey(), refetchInterval: 15_000, refetchOnWindowFocus: true } });
   const appointments = appointmentsQuery.data ?? [];
+
+  const updateAppointment = useUpdateManagerAppointment();
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [confirmingCancel, setConfirmingCancel] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string }>();
+
+  const currentAppointments = useMemo(
+    () => appointments
+      .filter((appointment) => !appointmentIsArchived(appointment))
+      .sort((left, right) => appointmentStart(left) - appointmentStart(right)),
+    [appointments],
+  );
+
   const managerStatusLabel = (status: string) => status.toLowerCase() === 'pending' ? t('scheduled') : statusLabel(status);
   const statusClass = (status: string) => {
     const normalized = status.toLowerCase();
     if (normalized === 'confirmed') return 'manager-status-confirmed';
     if (normalized === 'cancelled') return 'manager-status-cancelled';
+    if (normalized === 'completed') return 'manager-status-confirmed';
     return 'manager-status-scheduled';
   };
 
+  const markDone = (appointment: Appointment) => {
+    updateAppointment.mutate({ appointmentId: appointment.id, data: { status: 'completed' } }, {
+      onSuccess: () => {
+        setFeedback({ tone: 'success', message: t('bookingCompleted') });
+        queryClient.invalidateQueries({ queryKey: getListManagerAppointmentsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListManagerCustomersQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetAvailabilityQueryKey() });
+      }
+      ,
+      onError: () => setFeedback({ tone: 'error', message: t('bookingUpdateError') }),
+    });
+  };
+
+  const cancelBooking = (appointment: Appointment) => {
+    updateAppointment.mutate({ appointmentId: appointment.id, data: { status: 'cancelled' } }, {
+      onSuccess: () => {
+        setConfirmingCancel(null);
+        setFeedback({ tone: 'success', message: t('appointmentCancelled') });
+        queryClient.invalidateQueries({ queryKey: getListManagerAppointmentsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListManagerCustomersQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetAvailabilityQueryKey() });
+      }
+      ,
+      onError: () => setFeedback({ tone: 'error', message: t('appointmentCancelError') }),
+    });
+  };
+
+  const getWhatsAppLink = (phone: string, appointment: Appointment) => {
+    let cleaned = phone.replace(/\D/g, '');
+    if (cleaned.startsWith('0') && cleaned.length === 10) {
+      cleaned = '971' + cleaned.slice(1);
+    }
+    if (cleaned.length < 8 || cleaned.length > 15) return null;
+    const msgTemplate = t('whatsappMessage');
+    const text = msgTemplate
+      .replace('{name}', appointment.customerName)
+      .replace('{date}', formatDate(appointment.date, { month: 'short', day: 'numeric' }))
+      .replace('{time}', appointment.time);
+    return `https://wa.me/${cleaned}?text=${encodeURIComponent(text)}`;
+  };
+
   return (
-       <section id="appointment-management" className="manager-section mt-0 rounded-2xl border p-4 sm:p-5" data-testid="appointment-management">
-      <div className="border-b border-[hsl(var(--border))] pb-4">
-         <div className="manager-section-header ps-3">
-           <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('appointmentList')}</p>
-        <h2 className="mt-1 font-display text-3xl">{t('appointments')}</h2>
-        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('appointmentIntro')}</p>
-         </div>
+    <>
+      <section id="appointment-management" className="manager-section mt-0 space-y-4 rounded-2xl border p-4 sm:p-5" data-testid="appointment-management">
+        <div className="border-b border-[hsl(var(--border))] pb-4">
+           <div className="manager-section-header ps-3">
+             <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('appointmentList')}</p>
+          <h2 className="mt-1 font-display text-3xl">{t('appointments')}</h2>
+          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('appointmentIntro')}</p>
+           </div>
+        </div>
+        {feedback && <p className={`text-sm ${feedback.tone === 'error' ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--secondary))]'}`} role="status">{feedback.message}</p>}
+        <div className="space-y-3">
+          {appointmentsQuery.isLoading ? <LoadingCards count={2} /> : appointmentsQuery.isError ? <ErrorMessage retry={() => appointmentsQuery.refetch()} /> : currentAppointments.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noAppointments')}</div> : currentAppointments.map((appointment) => {
+            const waLink = getWhatsAppLink(appointment.phone, appointment);
+
+            return (
+              <div key={appointment.id}>
+                <article className={`manager-list-row rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 ${editingId === appointment.id ? 'border-[hsl(var(--primary))] ring-1 ring-[hsl(var(--primary)/.25)]' : ''}`} data-testid={`appointment-manager-card-${appointment.id}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate font-semibold">{appointment.customerName}</h3>
+                      <p className="mt-1 truncate text-xs text-[hsl(var(--muted-foreground))]">{appointment.email} · {appointment.phone}</p>
+                    </div>
+                    <span className={`manager-status-badge ${statusClass(appointment.status)}`}>{managerStatusLabel(appointment.status)}</span>
+                  </div>
+                  <p className="mt-4 font-display text-xl">{appointment.serviceNames.map(translateServiceName).join(' · ')}</p>
+                  <div className="mt-3 flex flex-wrap gap-3 text-xs text-[hsl(var(--muted-foreground))]">
+                    <span className="flex items-center gap-1.5"><CalendarDays size={14} className="text-[hsl(var(--primary))]" />{formatDate(appointment.date, { month: 'short', day: 'numeric' })}</span>
+                    <span className="flex items-center gap-1.5"><Clock3 size={14} className="text-[hsl(var(--primary))]" />{appointment.time}</span>
+                    <span>{appointment.stylistName}</span>
+                    <span>{formatPrice(appointment.totalPrice)}</span>
+                  </div>
+
+                  {confirmingCancel === appointment.id ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-[hsl(var(--destructive)/.28)] bg-[hsl(var(--destructive)/.05)] p-3 text-sm">
+                      <span className="text-[hsl(var(--destructive))]">{t('confirmCancellation')} <span className="opacity-70">{t('cancelBookingWarning')}</span></span>
+                      <div className="ml-auto flex gap-2">
+                        <button type="button" onClick={() => setConfirmingCancel(null)} className="rounded-full border border-[hsl(var(--border))] px-3 py-2 text-[10px] font-bold bg-[hsl(var(--card))]">{t('cancel')}</button>
+                        <button type="button" disabled={updateAppointment.isPending} onClick={() => cancelBooking(appointment)} className="rounded-full bg-[hsl(var(--destructive))] px-3 py-2 text-[10px] font-bold text-[hsl(var(--destructive-foreground))] disabled:opacity-60">{updateAppointment.isPending ? t('saving') : t('confirmCancellation')}</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[hsl(var(--border))] pt-3">
+                      <button type="button" onClick={() => { setEditingId(appointment.id); setConfirmingCancel(null); }} className="inline-flex items-center justify-center gap-1.5 rounded-full border border-[hsl(var(--border))] px-3 py-2 text-[10px] font-bold hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]"><Pencil size={12} /> {t('editBooking')}</button>
+                      {waLink && <a href={waLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1.5 rounded-full border border-[hsl(142_71%_45%/.25)] bg-[hsl(142_71%_45%/.06)] text-[hsl(142_71%_45%)] px-3 py-2 text-[10px] font-bold hover:bg-[hsl(142_71%_45%/.12)]" aria-label={t('whatsapp')}><Phone size={12} /> {t('whatsapp')}</a>}
+                      <div className="ml-auto flex gap-2">
+                        <button type="button" onClick={() => setConfirmingCancel(appointment.id)} className="inline-flex items-center justify-center rounded-full border border-[hsl(var(--border))] px-3 py-2 text-[10px] font-bold text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--destructive))] hover:text-[hsl(var(--destructive))]">{t('cancelBooking')}</button>
+                        <button type="button" disabled={updateAppointment.isPending} onClick={() => markDone(appointment)} className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[hsl(var(--primary))] px-3 py-2 text-[10px] font-bold text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--primary)/.9)] disabled:opacity-60"><Check size={12} /> {t('markDone')}</button>
+                      </div>
+                    </div>
+                  )}
+                </article>
+                {editingId === appointment.id && (
+                  <ManagerAppointmentEditor
+                    appointment={appointment}
+                    onCancel={() => setEditingId(null)}
+                    onSaved={(msg) => {
+                      setEditingId(null);
+                      setFeedback({ tone: 'success', message: msg });
+                      queryClient.invalidateQueries({ queryKey: getListManagerAppointmentsQueryKey() });
+                      queryClient.invalidateQueries({ queryKey: getListManagerCustomersQueryKey() });
+                      queryClient.invalidateQueries({ queryKey: getGetAvailabilityQueryKey() });
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+    </>
+  );
+}
+
+function ManagerArchive({ archivedAppointments }: { archivedAppointments: Appointment[] }) {
+  const { t, formatDate, formatPrice, statusLabel } = useLocale();
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <section id="archive-management" className="manager-section mt-6 rounded-2xl border p-4 sm:p-5">
+      <div className={`flex flex-col justify-between gap-3 sm:flex-row sm:items-center ${expanded ? 'border-b border-[hsl(var(--border))] pb-4' : ''}`}>
+        <button type="button" onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} className="min-w-0 text-left">
+          <span className="manager-section-header block ps-3">
+            <span className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('archive')}</span>
+            <span className="mt-1 flex items-center gap-2"><h2 className="font-display text-2xl">{t('archivedAppointments')}</h2><ChevronDown size={17} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} /></span>
+            <span className="mt-1 block text-xs text-[hsl(var(--muted-foreground))]">{archivedAppointments.length} {t('appointments')}</span>
+          </span>
+        </button>
+        <div className="flex flex-wrap gap-2">
+          {archivedAppointments.length > 0 && (
+            <button type="button" onClick={() => downloadAppointmentsCsv(archivedAppointments, 'appointments-archive.csv')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[hsl(var(--primary)/.4)] bg-[hsl(var(--primary)/.05)] text-[hsl(var(--primary))] px-4 py-2.5 text-[11px] font-bold tracking-[.08em] hover:bg-[hsl(var(--primary)/.1)]"><ArrowRight size={14} className="rotate-90" /> {t('exportCsv')}</button>
+          )}
+          <button type="button" onClick={() => setExpanded((current) => !current)} className="inline-flex min-h-10 items-center justify-center rounded-full border border-[hsl(var(--border))] px-4 py-2.5 text-[11px] font-bold tracking-[.08em] hover:border-[hsl(var(--primary))]">{expanded ? t('closeSection') : t('viewAll')}</button>
+        </div>
       </div>
-      <div className="mt-4 space-y-3">
-        {appointmentsQuery.isLoading ? <LoadingCards count={2} /> : appointmentsQuery.isError ? <ErrorMessage retry={() => appointmentsQuery.refetch()} /> : appointments.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noAppointments')}</div> : appointments.map((appointment) => (
-          <article key={appointment.id} className="manager-list-row rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`appointment-manager-card-${appointment.id}`}>
-            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate font-semibold">{appointment.customerName}</h3><p className="mt-1 truncate text-xs text-[hsl(var(--muted-foreground))]">{appointment.email}</p></div><span className={`manager-status-badge ${statusClass(appointment.status)}`}>{managerStatusLabel(appointment.status)}</span></div>
-            <p className="mt-4 font-display text-xl">{appointment.serviceNames.map(translateServiceName).join(' · ')}</p>
-            <div className="mt-3 flex flex-wrap gap-3 text-xs text-[hsl(var(--muted-foreground))]"><span className="flex items-center gap-1.5"><CalendarDays size={14} className="text-[hsl(var(--primary))]" />{formatDate(appointment.date, { month: 'short', day: 'numeric' })}</span><span className="flex items-center gap-1.5"><Clock3 size={14} className="text-[hsl(var(--primary))]" />{appointment.time}</span><span>{appointment.stylistName}</span><span>{formatPrice(appointment.totalPrice)}</span></div>
-          </article>
-        ))}
+
+      <div hidden={!expanded} className="mt-4">
+        {archivedAppointments.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noAppointments')}</div>
+        ) : (
+          <div className="group relative">
+            <div className="mb-2 text-right text-[10px] uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))] sm:hidden">{t('swipeToScroll')}</div>
+            <div className="relative w-full overflow-x-auto rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]">
+              <table className="w-full text-left text-xs whitespace-nowrap">
+              <thead className="bg-[hsl(var(--muted)/.5)] text-[9px] uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">{t('dateTime')}</th>
+                  <th className="px-4 py-3 font-semibold">{t('name')}</th>
+                  <th className="px-4 py-3 font-semibold">{t('service')}</th>
+                  <th className="px-4 py-3 font-semibold">{t('employee')}</th>
+                  <th className="px-4 py-3 font-semibold">{t('price')}</th>
+                  <th className="px-4 py-3 font-semibold">{t('emailAddress')}</th>
+                  <th className="px-4 py-3 font-semibold">{t('duration')}</th>
+                  <th className="px-4 py-3 font-semibold">{t('notes')}</th>
+                  <th className="px-4 py-3 font-semibold">{t('created')}</th>
+                  <th className="px-4 py-3 font-semibold">{t('status')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[hsl(var(--border)/.6)]">
+                {archivedAppointments.map(appointment => (
+                  <tr key={appointment.id} className="hover:bg-[hsl(var(--muted)/.25)]">
+                    <td className="px-4 py-3"><div className="font-semibold">{formatDate(appointment.date, { month: 'short', day: 'numeric' })}</div><div className="text-[hsl(var(--muted-foreground))]">{appointment.time}</div></td>
+                    <td className="px-4 py-3"><div className="font-semibold">{appointment.customerName}</div><div className="text-[hsl(var(--muted-foreground))]">{appointment.phone}</div></td>
+                    <td className="px-4 py-3 max-w-[200px] truncate">{appointment.serviceNames.join(', ')}</td>
+                    <td className="px-4 py-3">{appointment.stylistName}</td>
+                    <td className="px-4 py-3">{formatPrice(appointment.totalPrice)}</td>
+                    <td className="px-4 py-3">{appointment.email}</td>
+                    <td className="px-4 py-3">{appointment.totalDurationMinutes} {t('minutes')}</td>
+                    <td className="max-w-[260px] whitespace-normal px-4 py-3">{appointment.notes || '—'}</td>
+                    <td className="px-4 py-3">{formatDate(appointment.createdAt, { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                    <td className="px-4 py-3"><span className={`manager-status-badge ${appointment.status === 'completed' || appointment.status === 'confirmed' ? 'manager-status-confirmed' : appointment.status === 'cancelled' ? 'manager-status-cancelled' : 'manager-status-scheduled'}`}>{statusLabel(appointment.status)}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -1007,13 +1393,22 @@ function ManagerOverview({ onOpenTeam }: { onOpenTeam?: () => void }) {
   const customers = customersQuery.data ?? [];
   const appointments = appointmentsQuery.data ?? [];
   const today = localIsoDate(new Date());
-  const upcomingAppointments = useMemo(
-    () => appointments
-      .filter((appointment) => appointment.status !== 'cancelled' && appointment.date >= today)
-      .sort((left, right) => `${left.date} ${left.time}`.localeCompare(`${right.date} ${right.time}`))
-      .slice(0, 4),
-    [appointments, today],
-  );
+
+  const currentAppointments = appointments.filter((appointment) => !appointmentIsArchived(appointment));
+  const upcomingAppointments = [...currentAppointments].sort((left, right) => appointmentStart(left) - appointmentStart(right));
+
+  const todayAppointments = appointments.filter((appointment) => appointment.date === today);
+  const todaysWorkload = todayAppointments.filter((appointment) => appointment.status !== 'cancelled').length;
+  const totalAppointmentsToday = todayAppointments.length;
+  const completedToday = todayAppointments.filter((appointment) => appointment.status === 'completed').length;
+  const upcomingCount = upcomingAppointments.length;
+  const nextVisit = upcomingAppointments[0];
+  const nextVisitAppointments = nextVisit
+    ? upcomingAppointments.filter((appointment) =>
+      appointment.date === nextVisit.date && appointment.time === nextVisit.time)
+    : [];
+  const todayLabel = formatDate(new Date(), { weekday: 'short', month: 'short', day: 'numeric' });
+
   const hasError = servicesQuery.isError || stylistsQuery.isError || customersQuery.isError || appointmentsQuery.isError;
   const isLoading = servicesQuery.isLoading || stylistsQuery.isLoading || customersQuery.isLoading || appointmentsQuery.isLoading;
   const managerStatusLabel = (status: string) => status.toLowerCase() === 'pending' ? t('scheduled') : statusLabel(status);
@@ -1031,7 +1426,7 @@ function ManagerOverview({ onOpenTeam }: { onOpenTeam?: () => void }) {
   };
 
   return (
-    <section className="mb-8" aria-labelledby="manager-overview-title" data-testid="manager-overview">
+    <section className="mb-8 min-w-0" aria-labelledby="manager-overview-title" data-testid="manager-overview">
       <div className="manager-hero relative overflow-hidden rounded-[1.35rem] bg-[hsl(var(--secondary))] p-5 text-[hsl(var(--card))] shadow-[0_20px_50px_hsl(var(--secondary)/.13)] sm:p-7 md:p-9">
         <div className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full border border-[hsl(var(--accent)/.25)] md:h-96 md:w-96" />
         <div className="pointer-events-none absolute -right-2 -top-10 h-56 w-56 rounded-full border border-[hsl(var(--accent)/.13)] md:h-72 md:w-72" />
@@ -1058,24 +1453,24 @@ function ManagerOverview({ onOpenTeam }: { onOpenTeam?: () => void }) {
           Array.from({ length: 4 }).map((_, index) => <div key={index} className="skeleton h-[106px] rounded-xl" />)
         ) : (
           <>
-            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-services"><div className="flex items-center justify-between"><Scissors size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">01</span></div><p className="mt-5 font-display text-3xl leading-none">{services.length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('activeServices')}</p></div>
-            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-team"><div className="flex items-center justify-between"><UserRound size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">02</span></div><p className="mt-5 font-display text-3xl leading-none">{stylists.filter((stylist) => stylist.active !== false).length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('activeTeam')}</p></div>
-            <div className="manager-stat manager-stat-accent rounded-xl border border-[hsl(var(--secondary))] p-4" data-testid="manager-stat-appointments"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--accent))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--card)/.5)]">03</span></div><p className="mt-5 font-display text-3xl leading-none">{upcomingAppointments.length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--card)/.58)]">{t('nextVisits')}</p></div>
-            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-customers"><div className="flex items-center justify-between"><UserRound size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">04</span></div><p className="mt-5 font-display text-3xl leading-none">{customers.filter((customer) => customer.upcomingAppointmentCount > 0).length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('scheduledCustomers')}</p></div>
+            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-workload"><div className="flex items-center justify-between"><Scissors size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">01</span></div><p className="mt-5 font-display text-3xl leading-none">{todaysWorkload}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('todaysWorkload')}</p><p className="mt-2 truncate text-[10px] text-[hsl(var(--muted-foreground))]">{todayLabel} · {completedToday} {t('completedToday')}</p></div>
+            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-total-today"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">02</span></div><p className="mt-5 font-display text-3xl leading-none">{totalAppointmentsToday}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('totalAppointmentsToday')}</p><p className="mt-2 truncate text-[10px] text-[hsl(var(--muted-foreground))]">{todayLabel}</p></div>
+            <div className="manager-stat manager-stat-accent rounded-xl border border-[hsl(var(--secondary))] p-4" data-testid="manager-stat-upcoming"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--accent))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--card)/.5)]">03</span></div><p className="mt-5 font-display text-3xl leading-none">{upcomingCount}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--card)/.58)]">{t('nextVisits')}</p></div>
+            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-next"><div className="flex items-center justify-between"><Clock3 size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">04</span></div><p className="mt-5 font-display text-3xl leading-none">{nextVisit ? nextVisit.time : '--:--'}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('nextVisit')}</p>{nextVisitAppointments.length > 0 && <div className="mt-2 space-y-0.5 truncate text-[10px] font-semibold text-[hsl(var(--muted-foreground))]">{nextVisitAppointments.map((appointment) => <div key={appointment.id} className="truncate">{appointment.stylistName}</div>)}</div>}</div>
           </>
         )}
       </div>
 
-      <div className="mt-3 grid items-start gap-3 lg:grid-cols-[1.25fr_.75fr]">
-        <div className="space-y-3">
-        <div className="manager-section rounded-xl border p-4 sm:p-5" data-testid="manager-next-visits">
+      <div className="mt-3 grid min-w-0 items-start gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,.75fr)]">
+        <div className="min-w-0 space-y-3">
+        <div className="manager-section min-w-0 rounded-xl border p-4 sm:p-5" data-testid="manager-next-visits">
           <div className="flex items-end justify-between gap-4 border-b border-[hsl(var(--border))] pb-4">
             <div><p className="font-mono-ui text-[10px] uppercase tracking-[.18em] text-[hsl(var(--primary))]">{t('atAGlance')}</p><h2 className="mt-1 font-display text-2xl">{t('nextVisits')}</h2></div>
             <span className="font-mono-ui text-[9px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{today}</span>
           </div>
           {hasError ? <div className="pt-4"><ErrorMessage retry={retryAll} /></div> : upcomingAppointments.length === 0 ? <p className="py-7 text-sm text-[hsl(var(--muted-foreground))]" data-testid="empty-upcoming-appointments">{t('noUpcomingAppointments')}</p> : (
             <div className="mt-3 divide-y divide-[hsl(var(--border)/.72)]">
-              {upcomingAppointments.map((appointment) => (
+              {upcomingAppointments.slice(0, 4).map((appointment) => (
                 <div key={appointment.id} className="manager-list-row grid gap-2 py-3 sm:grid-cols-[92px_1fr_auto] sm:items-center" data-testid={`manager-next-appointment-${appointment.id}`}>
                   <div className="flex items-center gap-2 font-mono-ui text-[10px] uppercase tracking-[.08em] text-[hsl(var(--primary))]"><CalendarDays size={13} /><span>{formatDate(appointment.date, { month: 'short', day: 'numeric' })}</span><span className="text-[hsl(var(--muted-foreground))]">{appointment.time}</span></div>
                   <div className="min-w-0"><p className="truncate text-sm font-semibold">{appointment.customerName}</p><p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{appointment.serviceNames.map(translateServiceName).join(' · ')} <span className="text-[hsl(var(--border))]">/</span> {appointment.stylistName}</p></div>
@@ -1087,12 +1482,13 @@ function ManagerOverview({ onOpenTeam }: { onOpenTeam?: () => void }) {
         </div>
         <ManagerAppointments />
         </div>
-        <div className="manager-section rounded-xl border p-4 sm:p-5" data-testid="manager-quick-access">
+        <div className="manager-section min-w-0 rounded-xl border p-4 sm:p-5" data-testid="manager-quick-access">
           <p className="font-mono-ui text-[10px] uppercase tracking-[.18em] text-[hsl(var(--primary))]">{t('quickAccess')}</p>
           <div className="mt-3 divide-y divide-[hsl(var(--border)/.72)]">
             <a href="#service-management" className="group flex min-h-[52px] items-center justify-between gap-3 py-3 text-sm font-semibold" data-testid="link-manager-services"><span className="flex items-center gap-3"><Scissors size={15} className="text-[hsl(var(--primary))]" />{t('serviceMenu')}</span><ArrowRight size={15} className="text-[hsl(var(--muted-foreground))] transition-transform group-hover:translate-x-1" /></a>
             <a href="#employee-management" onClick={onOpenTeam} className="group flex min-h-[52px] items-center justify-between gap-3 py-3 text-sm font-semibold" data-testid="link-manager-team"><span className="flex items-center gap-3"><UserRound size={15} className="text-[hsl(var(--primary))]" />{t('employeeRoster')}</span><ArrowRight size={15} className="text-[hsl(var(--muted-foreground))] transition-transform group-hover:translate-x-1" /></a>
-            <a href="#appointment-management" className="group flex min-h-[52px] items-center justify-between gap-3 py-3 text-sm font-semibold" data-testid="link-manager-appointments"><span className="flex items-center gap-3"><CalendarDays size={15} className="text-[hsl(var(--primary))]" />{t('appointmentList')}</span><ArrowRight size={15} className="text-[hsl(var(--muted-foreground))] transition-transform group-hover:translate-x-1" /></a>
+             <a href="#appointment-management" className="group flex min-h-[52px] items-center justify-between gap-3 py-3 text-sm font-semibold" data-testid="link-manager-appointments"><span className="flex items-center gap-3"><CalendarDays size={15} className="text-[hsl(var(--primary))]" />{t('appointmentList')}</span><ArrowRight size={15} className="text-[hsl(var(--muted-foreground))] transition-transform group-hover:translate-x-1" /></a>
+             <a href="#archive-management" className="group flex min-h-[52px] items-center justify-between gap-3 py-3 text-sm font-semibold" data-testid="link-manager-archive"><span className="flex items-center gap-3"><Archive size={15} className="text-[hsl(var(--primary))]" />{t('archivedAppointments')}</span><ArrowRight size={15} className="text-[hsl(var(--muted-foreground))] transition-transform group-hover:translate-x-1" /></a>
           </div>
         </div>
       </div>
@@ -1103,7 +1499,14 @@ function ManagerOverview({ onOpenTeam }: { onOpenTeam?: () => void }) {
 function ManagerSchedule() {
   const { t } = useLocale();
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
+  const appointmentsQuery = useListManagerAppointments({ query: { queryKey: getListManagerAppointmentsQueryKey(), refetchInterval: 15_000, refetchOnWindowFocus: true } });
   const stylists = stylistsQuery.data ?? [];
+  const archivedAppointments = useMemo(
+    () => (appointmentsQuery.data ?? [])
+      .filter((appointment) => appointmentIsArchived(appointment))
+      .sort((left, right) => appointmentStart(right) - appointmentStart(left)),
+    [appointmentsQuery.data],
+  );
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [rosterExpanded, setRosterExpanded] = useState(false);
   const [feedback, setFeedback] = useState<string>();
@@ -1138,15 +1541,15 @@ function ManagerSchedule() {
   };
 
   return (
-    <main className="manager-shell min-h-[calc(100dvh-76px)]">
-      <div className="mx-auto max-w-[1240px] px-4 py-7 sm:px-6 sm:py-10 md:px-8 md:py-12">
+    <main className="manager-shell min-h-[calc(100dvh-76px)] min-w-0 overflow-x-clip">
+      <div className="mx-auto min-w-0 max-w-[1240px] px-4 py-7 sm:px-6 sm:py-10 md:px-8 md:py-12">
        <div className="mb-4 flex justify-end">
          <button type="button" onClick={() => signOut({ redirectUrl: basePath || '/' })} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card)/.6)] px-4 py-2.5 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--muted-foreground))] transition-colors hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid="button-manager-sign-out">
            {t('signOut')}
          </button>
        </div>
        <ManagerOverview onOpenTeam={() => setRosterExpanded(true)} />
-      <div className="manager-grid grid gap-4 lg:grid-cols-2" data-testid="manager-masonry">
+      <div className="manager-grid grid min-w-0 gap-4 lg:grid-cols-2" data-testid="manager-masonry">
       <ServiceManagement />
         <section id="employee-management" className="manager-section mt-0 rounded-2xl border p-4 sm:p-5" data-testid="employee-management">
           <div className={`flex flex-col justify-between gap-3 sm:flex-row sm:items-center ${rosterExpanded ? 'border-b border-[hsl(var(--border))] pb-4' : ''}`}>
@@ -1183,6 +1586,7 @@ function ManagerSchedule() {
       </section>
        <ManagerCustomers />
       </div>
+      <ManagerArchive archivedAppointments={archivedAppointments} />
       </div>
     </main>
   );

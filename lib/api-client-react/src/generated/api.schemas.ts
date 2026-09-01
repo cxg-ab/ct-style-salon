@@ -5,8 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type HealthStatusStatus = typeof HealthStatusStatus[keyof typeof HealthStatusStatus];
+
+
+export const HealthStatusStatus = {
+  ok: 'ok',
+} as const;
+
 export interface HealthStatus {
-  status: string;
+  status: HealthStatusStatus;
 }
 
 export interface UploadUrlRequest {
@@ -187,6 +194,37 @@ export interface AppointmentInput {
 export interface AppointmentUpdateInput {
   date: string;
   time: string;
+}
+
+export type ManagerAppointmentUpdateStatus = typeof ManagerAppointmentUpdateStatus[keyof typeof ManagerAppointmentUpdateStatus];
+
+
+export const ManagerAppointmentUpdateStatus = {
+  pending: 'pending',
+  confirmed: 'confirmed',
+  cancelled: 'cancelled',
+  completed: 'completed',
+} as const;
+
+export interface ManagerAppointmentUpdate {
+  /**
+     * @minItems 1
+     * @maxItems 10
+     * @items.minimum 1
+     */
+  serviceIds?: number[];
+  /** @minimum 1 */
+  stylistId?: number;
+  /** @minLength 2 */
+  customerName?: string;
+  email?: string;
+  /** @minLength 7 */
+  phone?: string;
+  date?: string;
+  time?: string;
+  /** @nullable */
+  notes?: string | null;
+  status?: ManagerAppointmentUpdateStatus;
 }
 
 export interface Customer {

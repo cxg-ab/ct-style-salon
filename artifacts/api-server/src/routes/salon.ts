@@ -19,6 +19,9 @@ import {
   ListAppointmentsResponse,
   ListServicesResponse,
   ListStylistsResponse,
+  UpdateManagerAppointmentBody,
+  UpdateManagerAppointmentParams,
+  UpdateManagerAppointmentResponse,
   UpdateAppointmentBody,
   UpdateAppointmentParams,
   UpdateAppointmentResponse,
@@ -815,6 +818,7 @@ router.get("/availability", async (req, res): Promise<void> => {
       and(
         eq(appointmentsTable.date, date),
         ne(appointmentsTable.status, "cancelled"),
+        ne(appointmentsTable.status, "completed"),
       ),
     );
   const bookedByStylist = new Map<number, BookedAppointment[]>();
@@ -969,6 +973,7 @@ router.post("/appointments", async (req, res): Promise<void> => {
           eq(appointmentsTable.stylistId, body.data.stylistId),
           eq(appointmentsTable.date, date),
           ne(appointmentsTable.status, "cancelled"),
+          ne(appointmentsTable.status, "completed"),
         ),
       );
     const bookedAppointments = existingAppointments.map((appointment) => ({
@@ -1100,6 +1105,7 @@ router.patch("/appointments/:appointmentId", async (req, res): Promise<void> => 
           eq(appointmentsTable.date, date),
           ne(appointmentsTable.id, current.appointment.id),
           ne(appointmentsTable.status, "cancelled"),
+          ne(appointmentsTable.status, "completed"),
         ),
       );
     if (
@@ -1191,6 +1197,144 @@ router.get("/manager/appointments", async (req, res): Promise<void> => {
   res.json(ListManagerAppointmentsResponse.parse(await serializeAppointments(rows)));
 });
 
+router.patch("/manager/appointments/:appointmentId", async (req, res): Promise<void> => {
+  if (!(await requireSalonManager(req, res))) return;
+  await ensureSalonSeeded();
+
+  const params = UpdateManagerAppointmentParams.safeParse(req.params);
+  const body = UpdateManagerAppointmentBody.safeParse({
+    ...req.body,
+    serviceIds: req.body?.serviceIds === undefined
+      ? undefined
+      : parseServiceIds(req.body.serviceIds),
+    date: req.body?.date === undefined ? undefined : toDate(req.body.date),
+    notes: req.body?.notes === undefined ? undefined : req.body.notes,
+  });
+  if (!params.success || !body.success || Object.keys(body.data).length === 0) {
+    res.status(400).json({ error: "Check the appointment changes and try again." });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ appointment: appointmentsTable })
+      .from(appointmentsTable)
+      .where(eq(appointmentsTable.id, params.data.appointmentId))
+      .limit(1);
+    if (!current) {
+      res.status(404).json({ error: "Appointment not found." });
+      return;
+    }
+
+    const nextStatus = body.data.status ?? current.appointment.status;
+    const nextStylistId = body.data.stylistId ?? current.appointment.stylistId;
+    const nextServiceIds = body.data.serviceIds ??
+      (current.appointment.serviceIds.length > 0
+        ? current.appointment.serviceIds
+        : [current.appointment.serviceId]);
+    const nextDateValue = body.data.date ?? toDate(current.appointment.date);
+    const nextTime = body.data.time ?? current.appointment.time;
+
+    if (!nextDateValue) {
+      res.status(400).json({ error: "Choose a valid appointment date." });
+      return;
+    }
+
+    await tx.execute(sql`select pg_advisory_xact_lock(${nextStylistId})`);
+    const serviceRows = await tx
+      .select()
+      .from(servicesTable)
+      .where(inArray(servicesTable.id, nextServiceIds));
+    const [stylist] = await tx
+      .select()
+      .from(stylistsTable)
+      .where(and(eq(stylistsTable.id, nextStylistId), eq(stylistsTable.active, true)))
+      .limit(1);
+    if (serviceRows.length !== nextServiceIds.length || !stylist) {
+      res.status(400).json({ error: "Choose active services and an active employee." });
+      return;
+    }
+
+    const durationMinutes = serviceRows.reduce(
+      (total, service) => total + service.durationMinutes,
+      0,
+    );
+    const totalPrice = serviceRows.reduce(
+      (total, service) => total + Number(service.price),
+      0,
+    );
+    const date = nextDateValue.toISOString().slice(0, 10);
+
+    if (nextStatus !== "cancelled" && nextStatus !== "completed") {
+      if (process.env.NODE_ENV !== "test" && !isWithinBookingWindow(nextDateValue)) {
+        res.status(400).json({ error: "Active appointments must stay within the next five days." });
+        return;
+      }
+      const schedule = (stylist.schedule ?? []) as StylistScheduleEntry[];
+      const weekday = nextDateValue.getUTCDay();
+      if (!slotsForSchedule(schedule, weekday, durationMinutes).includes(nextTime)) {
+        res.status(400).json({ error: "That employee is not scheduled for the selected time." });
+        return;
+      }
+
+      const existingAppointments = await tx
+        .select({
+          id: appointmentsTable.id,
+          time: appointmentsTable.time,
+          durationMinutes: appointmentsTable.totalDurationMinutes,
+          legacyDurationMinutes: servicesTable.durationMinutes,
+        })
+        .from(appointmentsTable)
+        .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
+        .where(
+          and(
+            eq(appointmentsTable.stylistId, nextStylistId),
+            eq(appointmentsTable.date, date),
+            ne(appointmentsTable.id, current.appointment.id),
+            ne(appointmentsTable.status, "cancelled"),
+            ne(appointmentsTable.status, "completed"),
+          ),
+        );
+      if (
+        existingAppointments.some((appointment) =>
+          appointmentTimesOverlap(nextTime, durationMinutes, {
+            time: appointment.time,
+            durationMinutes: appointment.durationMinutes ?? appointment.legacyDurationMinutes,
+          }),
+        )
+      ) {
+        res.status(400).json({ error: "That employee already has an overlapping appointment." });
+        return;
+      }
+    }
+
+    const [updated] = await tx
+      .update(appointmentsTable)
+      .set({
+        serviceId: nextServiceIds[0],
+        serviceIds: nextServiceIds,
+        totalDurationMinutes: durationMinutes,
+        totalPrice: totalPrice.toFixed(2),
+        stylistId: nextStylistId,
+        customerName: body.data.customerName?.trim() ?? current.appointment.customerName,
+        email: body.data.email?.trim().toLowerCase() ?? current.appointment.email,
+        phone: body.data.phone?.trim() ?? current.appointment.phone,
+        date,
+        time: nextTime,
+        notes: body.data.notes === undefined ? current.appointment.notes : body.data.notes,
+        status: nextStatus,
+      })
+      .where(eq(appointmentsTable.id, current.appointment.id))
+      .returning();
+
+    res.json(
+      UpdateManagerAppointmentResponse.parse(
+        appointmentResponse(updated, serviceRows, stylist.name),
+      ),
+    );
+  });
+});
+
 router.get("/manager/customers", async (req, res): Promise<void> => {
   if (!(await requireSalonManager(req, res))) return;
   await ensureSalonSeeded();
@@ -1217,7 +1361,7 @@ router.get("/manager/customers", async (req, res): Promise<void> => {
     }
   >();
   for (const row of rows) {
-    if (row.status === "cancelled") continue;
+    if (row.status === "cancelled" || row.status === "completed") continue;
     const key = row.email.toLowerCase();
     const customer = customers.get(key) ?? {
       email: row.email,

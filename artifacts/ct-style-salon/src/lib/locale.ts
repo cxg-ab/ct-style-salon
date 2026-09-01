@@ -51,7 +51,11 @@ type MessageKey =
    | 'serviceDeleted' | 'serviceDeleteError' | 'serviceDeleteConflict'
    | 'atAGlance' | 'activeServices' | 'activeTeam' | 'nextVisits' | 'returningGuests' | 'scheduledCustomers'
    | 'quickAccess' | 'viewAll' | 'noUpcomingAppointments' | 'refreshData' | 'workspaceTitle'
-   | 'workspaceIntro' | 'todayAt' | 'openingHours' | 'active' | 'scheduled' | 'openAndEdit' | 'closeSection';
+   | 'workspaceIntro' | 'todayAt' | 'openingHours' | 'active' | 'scheduled' | 'openAndEdit' | 'closeSection'
+   | 'markDone' | 'cancelBooking' | 'editBooking' | 'whatsapp' | 'notes' | 'status' | 'completed' | 'saveBooking'
+   | 'archive' | 'archivedAppointments' | 'exportCsv' | 'todaysWorkload' | 'totalAppointmentsToday' | 'completedToday' | 'needsConfirmation' | 'nextVisit'
+    | 'confirmCancellation' | 'cancelBookingWarning' | 'bookingUpdated' | 'bookingCompleted' | 'bookingUpdateError' | 'created'
+   | 'whatsappMessage' | 'swipeToScroll';
 
 const messages: Record<Locale, Record<MessageKey, string>> = {
   en: {
@@ -169,6 +173,15 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
      workspaceIntro: 'A clear view of the menu, the team, and the guests who are due in next.',
      todayAt: 'Today at', openingHours: 'Opening hours', active: 'Active',
      scheduled: 'Scheduled', openAndEdit: 'Open & edit', closeSection: 'Close',
+     markDone: 'Mark done', cancelBooking: 'Cancel booking', editBooking: 'Edit booking',
+     whatsapp: 'WhatsApp', notes: 'Notes', status: 'Status', completed: 'Completed', saveBooking: 'Save booking',
+     archive: 'Archive', archivedAppointments: 'Archived appointments', exportCsv: 'Export CSV',
+      todaysWorkload: 'Today’s workload', totalAppointmentsToday: 'Total appointments today', completedToday: 'done today', needsConfirmation: 'Needs confirmation', nextVisit: 'Next visit',
+     confirmCancellation: 'Confirm cancellation', cancelBookingWarning: 'This booking will be cancelled and the slot freed.',
+      bookingUpdated: 'Booking was updated.', bookingCompleted: 'Booking marked done and moved to the archive.', bookingUpdateError: 'We could not update this booking. Check the details and try again.',
+      created: 'Created',
+     whatsappMessage: 'Hello {name}, this is CT Style Salon regarding your appointment on {date} at {time}.',
+     swipeToScroll: 'Swipe to scroll',
   },
   ar: {
     theSalon: 'الصالون', bookVisit: 'احجز زيارة', yourAppointments: 'مواعيدك',
@@ -285,6 +298,15 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
       workspaceIntro: 'نظرة واضحة على القائمة والفريق والضيوف القادمين قريباً.',
       todayAt: 'اليوم الساعة', openingHours: 'ساعات العمل', active: 'نشط',
       scheduled: 'مجدول', openAndEdit: 'فتح وتعديل', closeSection: 'إغلاق',
+      markDone: 'اكتمل', cancelBooking: 'إلغاء الحجز', editBooking: 'تعديل الحجز',
+      whatsapp: 'واتساب', notes: 'ملاحظات', status: 'الحالة', completed: 'مكتمل', saveBooking: 'حفظ الحجز',
+      archive: 'الأرشيف', archivedAppointments: 'المواعيد المؤرشفة', exportCsv: 'تصدير CSV',
+       todaysWorkload: 'مهام اليوم', totalAppointmentsToday: 'إجمالي مواعيد اليوم', completedToday: 'مكتملة اليوم', needsConfirmation: 'بحاجة لتأكيد', nextVisit: 'الزيارة التالية',
+      confirmCancellation: 'تأكيد الإلغاء', cancelBookingWarning: 'سيتم إلغاء هذا الحجز وإخلاء الوقت.',
+      bookingUpdated: 'تم تحديث الحجز.', bookingCompleted: 'تم إكمال الحجز ونقله إلى الأرشيف.', bookingUpdateError: 'تعذر تحديث الحجز. تحقق من البيانات وحاول مرة أخرى.',
+      created: 'تاريخ الإنشاء',
+      whatsappMessage: 'مرحباً {name}، معك صالون CT Style بخصوص موعدك يوم {date} الساعة {time}.',
+      swipeToScroll: 'اسحب للتمرير',
   },
 };
 
@@ -355,8 +377,8 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
       },
       translateServiceName: (name) => locale === 'ar' ? (serviceTranslations[name]?.name ?? name) : name,
       statusLabel: (status) => {
-        const key = status.toLowerCase() as 'confirmed' | 'pending' | 'cancelled';
-        return ['confirmed', 'pending', 'cancelled'].includes(key) ? messages[locale][key] : status;
+        const key = status.toLowerCase() as 'confirmed' | 'pending' | 'cancelled' | 'completed';
+        return ['confirmed', 'pending', 'cancelled', 'completed'].includes(key) ? messages[locale][key] : status;
       },
     };
   }, [locale]);
