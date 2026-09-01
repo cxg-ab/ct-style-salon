@@ -1062,6 +1062,7 @@ function DateStrip({ date, onChange }: { date: string; onChange: (date: string) 
 
 function Book() {
   const { t, formatPrice, formatDate, serviceCopy, stylistCopy } = useLocale();
+  const { isSignedIn } = useAuth();
   const { user } = useUser();
   const [step, setStep] = useState(1);
   const [stylistId, setStylistId] = useState<number>();
@@ -1124,7 +1125,9 @@ function Book() {
 }
 
 function StepPanel({ eyebrow, title, children }: { eyebrow: string; title: string; children: React.ReactNode }) {
-  return <section className="reveal rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card)/.55)] p-5 sm:p-8"><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{eyebrow}</p><h2 className="mt-3 mb-8 font-display text-4xl leading-none sm:text-5xl">{title}</h2>{children}</section>;
+  const { t } = useLocale();
+  const { isSignedIn } = useAuth();
+  return <section className="reveal rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card)/.55)] p-5 sm:p-8"><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{eyebrow}</p><h2 className="mt-3 mb-8 font-display text-4xl leading-none sm:text-5xl">{title}</h2>{eyebrow.startsWith('04 /') && (isSignedIn ? <p className="mb-5 rounded-xl bg-[hsl(var(--primary)/.07)] p-4 text-sm text-[hsl(var(--primary))]" data-testid="status-booking-account">{t('bookingAccountSaved')}</p> : <p className="mb-5 rounded-xl bg-[hsl(var(--muted))] p-4 text-sm text-[hsl(var(--muted-foreground))]" data-testid="status-booking-account">{t('bookingAccountPrompt')} <Link href="/sign-in" className="font-semibold text-[hsl(var(--primary))]">{t('signIn')}</Link></p>)}{children}</section>;
 }
 function BackButton({ onClick }: { onClick: () => void }) {
   const { t } = useLocale();

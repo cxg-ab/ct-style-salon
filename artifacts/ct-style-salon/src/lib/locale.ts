@@ -31,7 +31,8 @@ type MessageKey =
   | 'continue' | 'back' | 'holdingChair' | 'confirmAppointment' | 'bookingTaken'
   | 'yourVisit' | 'selectService' | 'ritualBegins' | 'stylistToChoose' | 'dateToChoose'
    | 'selectedServices' | 'addAnotherService' | 'removeService' | 'totalDuration' | 'totalPrice'
-  | 'noPayment' | 'confirmationInbox' | 'inTheBooks' | 'seeYouSoon' | 'confirmationSent'
+  | 'noPayment' | 'bookingAccountPrompt' | 'bookingAccountSaved' | 'bookingAttached'
+  | 'confirmationInbox' | 'inTheBooks' | 'seeYouSoon' | 'confirmationSent'
   | 'viewAppointments' | 'yourVisits' | 'goodTimes' | 'lookupIntro' | 'lookupPlaceholder'
   | 'findVisits' | 'appointments' | 'nothingBooked' | 'readyHere' | 'bookAVisit'
   | 'myAccount' | 'accountIntro' | 'accountEmpty' | 'changeAppointment' | 'closeEditor'
@@ -116,6 +117,8 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
      totalDuration: 'Total duration', totalPrice: 'Total',
     stylistToChoose: 'Stylist to be chosen', dateToChoose: 'Date to be chosen',
     noPayment: 'No payment required. We will send a gentle confirmation to your inbox.',
+    bookingAccountPrompt: 'Want to manage this booking later?', bookingAccountSaved: 'This booking will be saved to your account.',
+    bookingAttached: 'This booking is attached to your account, so you can manage it from Your appointments.',
     confirmationInbox: 'A confirmation is headed to', inTheBooks: 'It is in the books',
     seeYouSoon: 'See you soon.', confirmationSent: 'We have kept a chair for you.',
     viewAppointments: 'View your appointments', yourVisits: 'Your visits', goodTimes: 'Keep the good times.',
@@ -223,6 +226,8 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
      totalDuration: 'المدة الإجمالية', totalPrice: 'الإجمالي',
     stylistToChoose: 'المصفف لم يُختر بعد', dateToChoose: 'التاريخ لم يُختر بعد',
     noPayment: 'لا حاجة للدفع. سنرسل تأكيداً لطيفاً إلى بريدك.',
+    bookingAccountPrompt: 'هل تريد إدارة هذا الموعد لاحقاً؟', bookingAccountSaved: 'سيتم حفظ هذا الموعد في حسابك.',
+    bookingAttached: 'تم ربط هذا الموعد بحسابك، ويمكنك إدارته من مواعيدك.',
     confirmationInbox: 'سيرسل التأكيد إلى', inTheBooks: 'تم تسجيل الموعد',
     seeYouSoon: 'نراك قريباً.', confirmationSent: 'احتفظنا بمقعد لك.',
     viewAppointments: 'عرض مواعيدك', yourVisits: 'زياراتك', goodTimes: 'احتفظ بالأوقات الجميلة.',
