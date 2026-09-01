@@ -7,9 +7,9 @@ Responsive booking experience for CT Style Salon at My City Centre Masdar, Abu D
 - Public browsing for salon services and stylists
 - Stylist-specific recurring availability
 - Multi-service appointment booking with duration-aware availability
-- Appointment lookup by email
+- Appointment lookup, cancel, and reschedule with email + booking reference
 - English and Arabic UI with RTL support
-- Clerk-protected manager workspace
+- Clerk-protected manager workspace with a day/week appointment book
 - Manager editing for services, employee profiles, photos, and schedules
 - PostgreSQL persistence with generated OpenAPI clients and Zod validators
 - App Storage uploads for employee profile photos
@@ -63,3 +63,7 @@ Guests can browse and book without an account. Manager mutations require a signe
 ```
 
 Employee photos are uploaded directly to App Storage through a manager-only presigned upload URL. The database stores the normalized object path, not an external image URL.
+
+## Agent update
+
+Later coding agents should start at [`AGENTS.md`](AGENTS.md) and [`.agents/memory/booking-loop-update.md`](.agents/memory/booking-loop-update.md). Do not restore email-only appointment lookup or confirmation copy that promises mail the server did not send.
