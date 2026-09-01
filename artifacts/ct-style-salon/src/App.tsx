@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Archive,
   CalendarDays,
+  CalendarPlus,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -75,6 +76,8 @@ import {
   bookingDateBounds,
   isFutureUaeSlot,
   rolloverDate,
+  slotTimeToMinutes,
+  uaeDateTimeParts,
   uaeIsoDate,
 } from '@/lib/uae-booking-time';
 import { Route, Switch, Link, Router as WouterRouter, useLocation } from 'wouter';
@@ -1074,6 +1077,50 @@ function appointmentStart(appointment: Pick<Appointment, 'date' | 'time'>): numb
   return new Date(year, month - 1, day, hour, minute, 0, 0).getTime();
 }
 
+function scheduleMinutes(value: string): number {
+  const [hour, minute] = value.split(':').map(Number);
+  return hour * 60 + minute;
+}
+
+function stylistHasAvailabilityWithinTwoHours(
+  stylist: Stylist,
+  appointments: Appointment[],
+  now: Date,
+): boolean {
+  const current = uaeDateTimeParts(now);
+  const weekday = new Date(`${current.date}T12:00:00.000Z`).getUTCDay();
+  const latestStart = current.minutes + 120;
+  const activeAppointments = appointments.filter((appointment) =>
+    localIsoDate(appointment.date) === current.date &&
+    appointment.stylistId === stylist.id &&
+    !['cancelled', 'completed'].includes(appointment.status.trim().toLowerCase()),
+  );
+
+  return stylist.schedule
+    .filter((entry) => entry.dayOfWeek === weekday)
+    .some((entry) => {
+      const open = scheduleMinutes(entry.openTime);
+      const close = scheduleMinutes(entry.closeTime);
+      for (let start = open; start + 90 <= close; start += 90) {
+        if (start < current.minutes || start > latestStart) continue;
+        const overlapsBreak = (entry.breaks ?? []).some((breakTime) => {
+          const breakStart = scheduleMinutes(breakTime.startTime);
+          const breakEnd = scheduleMinutes(breakTime.endTime);
+          return start < breakEnd && breakStart < start + 90;
+        });
+        if (overlapsBreak) continue;
+        const overlapsAppointment = activeAppointments.some((appointment) => {
+          const appointmentStartMinutes = slotTimeToMinutes(appointment.time);
+          if (appointmentStartMinutes === undefined) return false;
+          return appointmentStartMinutes < start + 90 &&
+            start < appointmentStartMinutes + appointment.totalDurationMinutes;
+        });
+        if (!overlapsAppointment) return true;
+      }
+      return false;
+    });
+}
+
 function appointmentIsArchived(appointment: Appointment, now = Date.now()): boolean {
   return appointment.status === 'cancelled' ||
     appointment.status === 'completed' ||
@@ -1452,6 +1499,9 @@ function ManagerOverview({ onOpenTeam }: { onOpenTeam?: () => void }) {
     ? upcomingAppointments.filter((appointment) =>
       appointment.date === nextVisit.date && appointment.time === nextVisit.time)
     : [];
+  const availableStylistsNextTwoHours = stylists
+    .filter((stylist) => stylist.active !== false && stylistHasAvailabilityWithinTwoHours(stylist, appointments, new Date(nowTick)))
+    .slice(0, 4);
   const todayLabel = formatDate(new Date(`${today}T12:00:00.000Z`), { weekday: 'short', month: 'short', day: 'numeric' });
 
   const hasError = servicesQuery.isError || stylistsQuery.isError || customersQuery.isError || appointmentsQuery.isError;
@@ -1500,7 +1550,7 @@ function ManagerOverview({ onOpenTeam }: { onOpenTeam?: () => void }) {
           <>
             <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-workload"><div className="flex items-center justify-between"><Scissors size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">01</span></div><p className="mt-5 font-display text-3xl leading-none">{completedAppointmentsToday}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('completedAppointmentsToday')}</p><p className="mt-2 truncate text-[10px] text-[hsl(var(--muted-foreground))]">{todayLabel}</p></div>
             <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-total-today"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">02</span></div><p className="mt-5 font-display text-3xl leading-none">{totalAppointmentsForDate}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('totalAppointmentsForDate')}</p><p className="mt-2 truncate text-[10px] text-[hsl(var(--muted-foreground))]">{todayLabel}</p></div>
-            <div className="manager-stat manager-stat-accent rounded-xl border border-[hsl(var(--secondary))] p-4" data-testid="manager-stat-upcoming"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--accent))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--card)/.5)]">03</span></div><p className="mt-5 font-display text-3xl leading-none">{upcomingCount}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--card)/.58)]">{t('nextVisits')}</p></div>
+            <div className="manager-stat manager-stat-accent rounded-xl border border-[hsl(var(--secondary))] p-4" data-testid="manager-stat-upcoming"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--accent))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--card)/.5)]">03</span></div><p className="mt-5 font-display text-3xl leading-none">{upcomingCount}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--card)/.58)]">{t('nextVisits')}</p><div className="mt-3 border-t border-[hsl(var(--card)/.16)] pt-3" data-testid="manager-available-stylists"><p className="font-mono-ui text-[9px] uppercase tracking-[.1em] text-[hsl(var(--card)/.5)]">{t('availableNextTwoHours')}</p>{availableStylistsNextTwoHours.length > 0 ? <div className="mt-1.5 space-y-0.5">{availableStylistsNextTwoHours.map((stylist) => <p key={stylist.id} className="truncate text-[11px] font-semibold text-[hsl(var(--card)/.82)]">{stylist.name}</p>)}</div> : <p className="mt-1.5 text-[10px] leading-4 text-[hsl(var(--card)/.55)]">{t('noEmployeesAvailableSoon')}</p>}<Link href="/book" className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.08em] text-[hsl(var(--accent))]" data-testid="link-book-from-availability"><CalendarPlus size={13} /> {t('bookAppointment')}</Link></div></div>
             <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-next"><div className="flex items-center justify-between"><Clock3 size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">04</span></div><p className="mt-5 font-display text-3xl leading-none">{nextVisit ? nextVisit.time : '--:--'}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('nextVisit')}</p>{nextVisitAppointments.length > 0 && <div className={`mt-2 text-[10px] font-semibold text-[hsl(var(--muted-foreground))] ${nextVisitAppointments.length > 1 ? 'space-y-0.5' : ''}`} data-testid="manager-next-visit-employees">{nextVisitAppointments.map((appointment) => <div key={appointment.id} className="truncate">{appointment.stylistName}</div>)}</div>}</div>
           </>
         )}
