@@ -5,6 +5,6 @@ description: Environment-specific behavior observed when syncing this workspace 
 
 The installed GitHub connector can read the repository and can write a root-level file through the Contents API, but Git Data API writes, GraphQL commit mutations, and nested Contents API paths may return a Cloudflare 403 even when the repository is private and the connection has `repo` scope.
 
-**Why:** Direct git HTTPS authentication is unavailable in the shell, and the connector's write edge blocks the normal whole-tree upload paths.
+**Why:** The connector's write edge blocks normal whole-tree upload paths even with `repo` scope; an unauthenticated HTTPS remote cannot serve as a fallback.
 
-**How to apply:** Do not claim a full GitHub push from this environment after a 403. Verify the remote branch and report the partial state, or use an authenticated git transport outside this connector when a complete push is required.
+**How to apply:** For a complete push, authenticate GitHub CLI, configure Git credentials with `gh auth setup-git`, fetch remote `main`, preserve divergent remote history without force-pushing, and verify local and remote head hashes match.
