@@ -31,4 +31,6 @@ export interface Appointment {
   notes: string | null;
   status: string;
   createdAt: Date;
+  lookupCode?: string;
+  emailSent?: boolean;
 }

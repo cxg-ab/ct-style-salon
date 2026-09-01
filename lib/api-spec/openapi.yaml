@@ -443,23 +443,71 @@ paths:
     get:
       operationId: listAppointments
       tags: [salon]
-      summary: List appointments for a guest email
+      summary: List appointments for a verified guest or the salon manager
       parameters:
         - name: email
           in: query
-          required: true
+          required: false
           schema:
             type: string
             format: email
+        - name: lookupCode
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 6
+            maxLength: 8
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: stylistId
+          in: query
+          required: false
+          schema:
+            type: integer
       responses:
         "200":
-          description: Guest appointments
+          description: Appointments for the authorised caller
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/Appointment"
+        "400":
+          description: Missing reference or invalid filters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Guest reference or manager sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many lookup attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       operationId: createAppointment
       tags: [salon]
@@ -479,6 +527,48 @@ paths:
                 $ref: "#/components/schemas/Appointment"
         "400":
           description: Invalid or unavailable appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /appointments/{appointmentId}:
+    patch:
+      operationId: updateAppointment
+      tags: [salon]
+      summary: Cancel or reschedule an appointment
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppointmentUpdate"
+      responses:
+        "200":
+          description: Appointment updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          description: Invalid change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Guest reference or manager sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Appointment not found
           content:
             application/json:
               schema:
@@ -822,6 +912,12 @@ components:
         createdAt:
           type: string
           format: date-time
+        lookupCode:
+          type: string
+          description: Shown after booking and after a verified lookup. Never returned for unauthenticated email search.
+        emailSent:
+          type: boolean
+          description: True when a confirmation email was accepted by the mail provider.
       required:
         - id
         - serviceId
@@ -840,6 +936,24 @@ components:
         - notes
         - status
         - createdAt
+    AppointmentUpdate:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        lookupCode:
+          type: string
+          minLength: 6
+          maxLength: 8
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+        status:
+          type: string
+          enum: [confirmed, cancelled]
     AppointmentInput:
       type: object
       properties:

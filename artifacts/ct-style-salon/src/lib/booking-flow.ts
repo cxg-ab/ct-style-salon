@@ -7,10 +7,10 @@ export type BookingSelection = {
   step: number;
 };
 
-export function selectEmployee(stylistId: number): BookingSelection {
+export function selectEmployee(stylistId: number, serviceIds: number[] = []): BookingSelection {
   return {
     stylistId,
-    serviceIds: [],
+    serviceIds,
     time: '',
     step: 2,
   };

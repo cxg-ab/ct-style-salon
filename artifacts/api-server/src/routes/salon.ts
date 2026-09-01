@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { clerkClient, getAuth } from "@clerk/express";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
@@ -26,6 +26,9 @@ import {
   UpdateStylistScheduleBody,
   UpdateStylistScheduleParams,
   UpdateStylistScheduleResponse,
+  UpdateAppointmentBody,
+  UpdateAppointmentParams,
+  UpdateAppointmentResponse,
 } from "@workspace/api-zod";
 import {
   appointmentsTable,
@@ -37,6 +40,13 @@ import {
   ensureSalonSeeded,
   type StylistScheduleEntry,
 } from "../lib/salon-seed";
+import {
+  allowLookupAttempt,
+  appointmentLookupCode,
+  clientKey,
+  lookupCodesMatch,
+} from "../lib/booking-access";
+import { confirmationMail, sendMail } from "../lib/mail";
 
 const router: IRouter = Router();
 type BookedAppointment = {
@@ -211,10 +221,15 @@ function toDate(value: unknown): Date | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
+function isActiveStatus(status: string | null | undefined): boolean {
+  return (status ?? "confirmed") !== "cancelled";
+}
+
 function appointmentResponse(
   row: typeof appointmentsTable.$inferSelect,
   serviceRows: Array<typeof servicesTable.$inferSelect>,
   stylistName: string,
+  extras: { lookupCode?: string; emailSent?: boolean } = {},
 ) {
   const serviceIds = row.serviceIds.length > 0 ? row.serviceIds : [row.serviceId];
   const servicesById = new Map(serviceRows.map((service) => [service.id, service]));
@@ -241,7 +256,31 @@ function appointmentResponse(
     totalPrice: Number(row.totalPrice ?? calculatedPrice),
     stylistName,
     date: new Date(`${row.date}T00:00:00.000Z`),
+    ...extras,
   };
+}
+
+async function loadAppointmentPayloads(
+  rows: Array<{ appointment: typeof appointmentsTable.$inferSelect; stylistName: string }>,
+  extras: { includeLookupCode?: boolean } = {},
+) {
+  return Promise.all(
+    rows.map(async ({ appointment, stylistName }) => {
+      const serviceIds =
+        appointment.serviceIds.length > 0
+          ? appointment.serviceIds
+          : [appointment.serviceId];
+      const serviceRows = await db
+        .select()
+        .from(servicesTable)
+        .where(inArray(servicesTable.id, serviceIds));
+      return appointmentResponse(appointment, serviceRows, stylistName, {
+        lookupCode: extras.includeLookupCode
+          ? appointmentLookupCode(appointment.email)
+          : undefined,
+      });
+    }),
+  );
 }
 
 function parseServiceIds(value: unknown): number[] {
@@ -702,7 +741,7 @@ router.get("/availability", async (req, res): Promise<void> => {
     })
     .from(appointmentsTable)
     .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
-    .where(eq(appointmentsTable.date, date));
+    .where(and(eq(appointmentsTable.date, date), ne(appointmentsTable.status, "cancelled")));
   const bookedByStylist = new Map<number, BookedAppointment[]>();
   for (const appointment of booked) {
     const appointments = bookedByStylist.get(appointment.stylistId) ?? [];
@@ -740,8 +779,47 @@ router.get("/appointments", async (req, res): Promise<void> => {
   await ensureSalonSeeded();
   const parsed = ListAppointmentsQueryParams.safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: "Enter a valid email address." });
+    res.status(400).json({ error: "Check the email, reference, or dates and try again." });
     return;
+  }
+
+  const { email, lookupCode, date, from, to, stylistId } = parsed.data;
+  if (email) {
+    const key = `${clientKey(req)}:${email.toLowerCase()}`;
+    if (!allowLookupAttempt(key)) {
+      res.status(429).json({ error: "Too many lookup attempts. Wait a few minutes and try again." });
+      return;
+    }
+    if (!lookupCodesMatch(email, lookupCode)) {
+      res.status(401).json({ error: "Enter the reference from your confirmation." });
+      return;
+    }
+    const rows = await db
+      .select({
+        appointment: appointmentsTable,
+        stylistName: stylistsTable.name,
+      })
+      .from(appointmentsTable)
+      .innerJoin(stylistsTable, eq(appointmentsTable.stylistId, stylistsTable.id))
+      .where(eq(appointmentsTable.email, email.toLowerCase()))
+      .orderBy(desc(appointmentsTable.date), desc(appointmentsTable.time));
+    res.json(ListAppointmentsResponse.parse(await loadAppointmentPayloads(rows, { includeLookupCode: true })));
+    return;
+  }
+
+  if (!(await requireSalonManager(req, res))) {
+    return;
+  }
+
+  const start = date ?? from;
+  const end = date ?? to ?? from;
+  const filters = [];
+  if (start) filters.push(gte(appointmentsTable.date, start));
+  if (end) filters.push(lte(appointmentsTable.date, end));
+  if (stylistId) filters.push(eq(appointmentsTable.stylistId, stylistId));
+  if (filters.length === 0) {
+    const today = new Date().toISOString().slice(0, 10);
+    filters.push(eq(appointmentsTable.date, today));
   }
 
   const rows = await db
@@ -751,26 +829,10 @@ router.get("/appointments", async (req, res): Promise<void> => {
     })
     .from(appointmentsTable)
     .innerJoin(stylistsTable, eq(appointmentsTable.stylistId, stylistsTable.id))
-    .where(eq(appointmentsTable.email, parsed.data.email.toLowerCase()))
-    .orderBy(desc(appointmentsTable.date), desc(appointmentsTable.time));
+    .where(and(...filters))
+    .orderBy(appointmentsTable.date, appointmentsTable.time);
 
-  res.json(
-    ListAppointmentsResponse.parse(
-      await Promise.all(
-        rows.map(async ({ appointment, stylistName }) => {
-          const serviceIds =
-            appointment.serviceIds.length > 0
-              ? appointment.serviceIds
-              : [appointment.serviceId];
-          const serviceRows = await db
-            .select()
-            .from(servicesTable)
-            .where(inArray(servicesTable.id, serviceIds));
-          return appointmentResponse(appointment, serviceRows, stylistName);
-        }),
-      ),
-    ),
-  );
+  res.json(ListAppointmentsResponse.parse(await loadAppointmentPayloads(rows)));
 });
 
 router.post("/appointments", async (req, res): Promise<void> => {
@@ -854,6 +916,7 @@ router.post("/appointments", async (req, res): Promise<void> => {
         and(
           eq(appointmentsTable.stylistId, body.data.stylistId),
           eq(appointmentsTable.date, date),
+          ne(appointmentsTable.status, "cancelled"),
         ),
       );
     const bookedAppointments = existingAppointments.map((appointment) => ({
@@ -887,12 +950,158 @@ router.post("/appointments", async (req, res): Promise<void> => {
       })
       .returning();
 
+    const lookupCode = appointmentLookupCode(created.email);
+    const emailSent = await sendMail(
+      confirmationMail({
+        customerName: created.customerName,
+        email: created.email,
+        date,
+        time: created.time,
+        stylistName: stylist[0].name,
+        serviceNames: serviceRows.map((service) => service.name),
+        lookupCode,
+      }),
+    );
+
     res.status(201).json(
       CreateAppointmentResponse.parse(
-        appointmentResponse(created, serviceRows, stylist[0].name),
+        appointmentResponse(created, serviceRows, stylist[0].name, { lookupCode, emailSent }),
       ),
     );
   });
+});
+
+router.patch("/appointments/:appointmentId", async (req, res): Promise<void> => {
+  await ensureSalonSeeded();
+  const params = UpdateAppointmentParams.safeParse(req.params);
+  const body = UpdateAppointmentBody.safeParse({
+    ...req.body,
+    date: req.body?.date ? toDate(req.body.date) : undefined,
+  });
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Check the appointment change and try again." });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(appointmentsTable)
+    .where(eq(appointmentsTable.id, params.data.appointmentId))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "That appointment could not be found." });
+    return;
+  }
+
+  const guestEmail = body.data.email?.toLowerCase();
+  const guestAuthorised = Boolean(
+    guestEmail &&
+    guestEmail === existing.email &&
+    lookupCodesMatch(existing.email, body.data.lookupCode),
+  );
+  if (guestEmail || body.data.lookupCode) {
+    if (!guestAuthorised) {
+      res.status(401).json({ error: "Enter the reference from your confirmation." });
+      return;
+    }
+  } else if (!(await requireSalonManager(req, res))) {
+    return;
+  }
+
+  if (!isActiveStatus(existing.status) && body.data.status !== "confirmed") {
+    res.status(400).json({ error: "That appointment has already been cancelled." });
+    return;
+  }
+
+  const nextStatus = body.data.status ?? existing.status;
+  const nextDate = body.data.date
+    ? body.data.date.toISOString().slice(0, 10)
+    : existing.date;
+  const nextTime = body.data.time ?? existing.time;
+  const moving = nextDate !== existing.date || nextTime !== existing.time;
+
+  if (nextStatus !== "cancelled" && moving) {
+    const serviceIds = existing.serviceIds.length > 0 ? existing.serviceIds : [existing.serviceId];
+    const serviceRows = await db
+      .select()
+      .from(servicesTable)
+      .where(inArray(servicesTable.id, serviceIds));
+    const durationMinutes =
+      existing.totalDurationMinutes ??
+      serviceRows.reduce((total, service) => total + service.durationMinutes, 0);
+    const [stylist] = await db
+      .select()
+      .from(stylistsTable)
+      .where(and(eq(stylistsTable.id, existing.stylistId), eq(stylistsTable.active, true)))
+      .limit(1);
+    if (!stylist) {
+      res.status(400).json({ error: "That employee is no longer available." });
+      return;
+    }
+    const weekday = new Date(`${nextDate}T00:00:00.000Z`).getUTCDay();
+    const schedule = (stylist.schedule ?? []) as StylistScheduleEntry[];
+    if (!slotsForSchedule(schedule, weekday, durationMinutes).includes(nextTime)) {
+      res.status(400).json({ error: "That employee is not scheduled for the selected time." });
+      return;
+    }
+    const existingAppointments = await db
+      .select({
+        id: appointmentsTable.id,
+        time: appointmentsTable.time,
+        durationMinutes: appointmentsTable.totalDurationMinutes,
+        legacyDurationMinutes: servicesTable.durationMinutes,
+      })
+      .from(appointmentsTable)
+      .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
+      .where(
+        and(
+          eq(appointmentsTable.stylistId, existing.stylistId),
+          eq(appointmentsTable.date, nextDate),
+          ne(appointmentsTable.status, "cancelled"),
+        ),
+      );
+    if (
+      existingAppointments.some((appointment) =>
+        appointment.id !== existing.id &&
+        appointmentTimesOverlap(nextTime, durationMinutes, {
+          time: appointment.time,
+          durationMinutes: appointment.durationMinutes ?? appointment.legacyDurationMinutes,
+        }),
+      )
+    ) {
+      res.status(400).json({ error: "That time was just booked. Please choose another slot." });
+      return;
+    }
+  }
+
+  const [updated] = await db
+    .update(appointmentsTable)
+    .set({
+      status: nextStatus,
+      date: nextDate,
+      time: nextTime,
+    })
+    .where(eq(appointmentsTable.id, existing.id))
+    .returning();
+
+  const serviceIds = updated.serviceIds.length > 0 ? updated.serviceIds : [updated.serviceId];
+  const serviceRows = await db
+    .select()
+    .from(servicesTable)
+    .where(inArray(servicesTable.id, serviceIds));
+  const [stylist] = await db
+    .select({ name: stylistsTable.name })
+    .from(stylistsTable)
+    .where(eq(stylistsTable.id, updated.stylistId))
+    .limit(1);
+
+  res.json(
+    UpdateAppointmentResponse.parse(
+      appointmentResponse(updated, serviceRows, stylist?.name ?? "", {
+        lookupCode: guestAuthorised ? appointmentLookupCode(updated.email) : undefined,
+      }),
+    ),
+  );
 });
 
 router.get("/salon-summary", (_req, res): void => {

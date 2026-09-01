@@ -462,7 +462,12 @@ export const GetAvailabilityResponse = zod.array(GetAvailabilityResponseItem)
  * @summary List appointments for a guest email
  */
 export const ListAppointmentsQueryParams = zod.object({
-  "email": zod.email()
+  "email": zod.email().optional(),
+  "lookupCode": zod.string().min(6).max(8).optional(),
+  "date": zod.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  "from": zod.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  "to": zod.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  "stylistId": zod.coerce.number().int().optional(),
 })
 
 
@@ -489,7 +494,9 @@ export const ListAppointmentsResponseItem = zod.object({
   "time": zod.string(),
   "notes": zod.string().nullable(),
   "status": zod.string(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "lookupCode": zod.string().optional(),
+  "emailSent": zod.boolean().optional(),
 })
 export const ListAppointmentsResponse = zod.array(ListAppointmentsResponseItem)
 
@@ -542,8 +549,24 @@ export const CreateAppointmentResponse = zod.object({
   "time": zod.string(),
   "notes": zod.string().nullable(),
   "status": zod.string(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "lookupCode": zod.string().optional(),
+  "emailSent": zod.boolean().optional(),
 })
+
+export const UpdateAppointmentParams = zod.object({
+  "appointmentId": zod.coerce.number().int(),
+})
+
+export const UpdateAppointmentBody = zod.object({
+  "email": zod.email().optional(),
+  "lookupCode": zod.string().min(6).max(8).optional(),
+  "date": zod.coerce.date().optional(),
+  "time": zod.string().optional(),
+  "status": zod.enum(["confirmed", "cancelled"]).optional(),
+})
+
+export const UpdateAppointmentResponse = CreateAppointmentResponse
 
 
 /**
