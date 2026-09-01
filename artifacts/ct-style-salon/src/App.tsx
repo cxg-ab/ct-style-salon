@@ -22,7 +22,6 @@ import {
   Scissors,
   Search,
   ShieldCheck,
-  Star,
   Trash2,
   UserRound,
   X,
@@ -271,11 +270,7 @@ function Home() {
       </section>
 
       <section className="border-b border-[hsl(var(--border))] bg-[hsl(var(--card))]">
-        <div className="mx-auto grid max-w-[1240px] gap-6 px-5 py-7 sm:grid-cols-3 sm:px-8">
-          <div className="flex items-center gap-4 border-b border-[hsl(var(--border)/.7)] pb-5 sm:border-b-0 sm:border-r sm:pb-0">
-            <Star size={22} fill="hsl(var(--accent))" className="text-[hsl(var(--accent))]" />
-             <div><strong className="block font-display text-2xl">{summary?.rating ?? '—'}</strong><span className="font-mono-ui text-[9px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">{summary?.reviewCount ? `${summary.reviewCount} ${t('guestNotes')}` : t('guestNotes')}</span></div>
-          </div>
+        <div className="mx-auto grid max-w-[1240px] gap-6 px-5 py-7 sm:grid-cols-2 sm:px-8">
           <div className="flex items-center gap-4 border-b border-[hsl(var(--border)/.7)] pb-5 sm:border-b-0 sm:border-r sm:pb-0 sm:pl-6">
             <MapPin size={21} className="text-[hsl(var(--primary))]" />
              <div><strong className="block text-sm">{summary?.neighborhood ?? 'My City Centre Masdar'}</strong><span className="font-mono-ui text-[9px] uppercase tracking-[.13em] text-[hsl(var(--muted-foreground))]">{t('khalifaCity')}</span></div>
