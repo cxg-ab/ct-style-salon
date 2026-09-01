@@ -37,6 +37,7 @@ let aishaId: number;
 let danielId: number;
 let signatureCutId: number;
 let beardRitualId: number;
+let fixtureServiceIds: number[] = [];
 let bundleDurationMinutes: number;
 let bundleTotalPrice: number;
 let createdServiceId: number | undefined;
@@ -218,6 +219,11 @@ before(async () => {
     0,
   );
   assert.ok(marcoId && aishaId && danielId && signatureCutId && beardRitualId);
+  fixtureServiceIds = services.body.map((service) => service.id);
+  for (const stylist of stylists.body) {
+    const updated = await updateStylistServiceIds(stylist.id, fixtureServiceIds);
+    assert.equal(updated.response.status, 200);
+  }
 });
 
 after(async () => {
@@ -586,6 +592,7 @@ test("manager roster lifecycle persists edits and archives employees with appoin
       accent: "#B86B45",
       photoUrl: "https://cdn.example.com/lifecycle.jpg",
       schedule: scheduleWithMonday("10:00", "14:00"),
+      serviceIds: [signatureCutId],
     }),
   });
   assert.equal(created.response.status, 201);
@@ -1305,8 +1312,25 @@ test("services referenced by appointments cannot be deleted", async () => {
 
 test("employee service eligibility is saved and enforced during booking", async () => {
   setSalonClockForTests(() => new Date(`${groupBookingDate}T00:00:00.000Z`));
-  const originalServiceIds = originalStylistServiceIds.get(marcoId) ?? [];
   try {
+    const cleared = await updateStylistServiceIds(marcoId, []);
+    assert.equal(cleared.response.status, 200);
+
+    const unavailable = await request<{ error: string }>("/api/appointments", {
+      method: "POST",
+      body: JSON.stringify({
+        serviceIds: [signatureCutId],
+        stylistId: marcoId,
+        customerName: "Unassigned Employee",
+        email: "unassigned-employee-regression@example.com",
+        phone: "+971501234567",
+        date: groupBookingDate,
+        time: "10:00 AM",
+      }),
+    });
+    assert.equal(unavailable.response.status, 400);
+    assert.equal(unavailable.body.error, "That employee does not provide all selected services.");
+
     const updated = await updateStylistServiceIds(marcoId, [signatureCutId]);
     assert.equal(updated.response.status, 200);
     assert.deepEqual(updated.body.serviceIds, [signatureCutId]);
@@ -1329,7 +1353,7 @@ test("employee service eligibility is saved and enforced during booking", async 
       "That employee does not provide all selected services.",
     );
   } finally {
-    await updateStylistServiceIds(marcoId, originalServiceIds);
+    await updateStylistServiceIds(marcoId, fixtureServiceIds);
     await db.delete(appointmentsTable).where(
       eq(appointmentsTable.email, "eligibility-regression@example.com"),
     );
@@ -1338,9 +1362,9 @@ test("employee service eligibility is saved and enforced during booking", async 
 
 test("group bookings create linked rows atomically and reject internal overlaps", async () => {
   setSalonClockForTests(() => new Date(`${groupBookingDate}T00:00:00.000Z`));
-  await updateStylistServiceIds(marcoId, []);
-  await updateStylistServiceIds(aishaId, []);
-  await updateStylistServiceIds(danielId, []);
+  await updateStylistServiceIds(marcoId, fixtureServiceIds);
+  await updateStylistServiceIds(aishaId, fixtureServiceIds);
+  await updateStylistServiceIds(danielId, fixtureServiceIds);
   await updateSchedule(marcoId, scheduleWithMonday("09:00", "18:00"));
   await updateSchedule(aishaId, scheduleWithMonday("09:00", "18:00"));
   await updateSchedule(danielId, scheduleWithMonday("09:00", "18:00"));
@@ -1442,7 +1466,7 @@ test("availability offers every 30 minutes and respects the selected service dur
   assert.equal(created.response.status, 201);
 
   try {
-    await updateStylistServiceIds(marcoId, []);
+    await updateStylistServiceIds(marcoId, [created.body.id]);
     await updateSchedule(marcoId, scheduleWithMonday("10:00", "18:00"));
     const availability = await request<Array<{ slots: string[] }>>(
       `/api/availability?date=${groupBookingDate}&stylistId=${marcoId}&serviceIds=${created.body.id}`,

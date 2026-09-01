@@ -182,7 +182,7 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
       bookingUpdated: 'Booking was updated.', bookingCompleted: 'Booking marked done and moved to the archive.', bookingUpdateError: 'We could not update this booking. Check the details and try again.',
       created: 'Created',
      whatsappMessage: 'Hello {name}, this is CT Style Salon regarding your appointment on {date} at {time}.',
-     person: 'Person', addPerson: 'Add person', removePerson: 'Remove person', groupBooking: 'Group booking', leadContact: 'Lead contact', servicesFor: 'Services for', employeeFor: 'Employee for', timeFor: 'Time for', anyoneAvailable: 'Anyone available', services: 'Active services', managerServicesCheckboxes: 'Choose the services this employee performs. They appear in booking only when they can perform every selected service. Leave all unchecked to allow all active services.', cancelledCount: '{count} cancelled', personNumber: 'Person {number}',
+     person: 'Person', addPerson: 'Add person', removePerson: 'Remove person', groupBooking: 'Group booking', leadContact: 'Lead contact', servicesFor: 'Services for', employeeFor: 'Employee for', timeFor: 'Time for', anyoneAvailable: 'Anyone available', services: 'Active services', managerServicesCheckboxes: 'Choose the services this employee performs. They appear in booking only when they can perform every selected service. Leave all unchecked to keep them unavailable until services are assigned.', cancelledCount: '{count} cancelled', personNumber: 'Person {number}',
      swipeToScroll: 'Swipe to scroll',
   },
   ar: {
@@ -308,7 +308,7 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
       bookingUpdated: 'تم تحديث الحجز.', bookingCompleted: 'تم إكمال الحجز ونقله إلى الأرشيف.', bookingUpdateError: 'تعذر تحديث الحجز. تحقق من البيانات وحاول مرة أخرى.',
       created: 'تاريخ الإنشاء',
       whatsappMessage: 'مرحباً {name}، معك صالون CT Style بخصوص موعدك يوم {date} الساعة {time}.',
-      person: 'شخص', addPerson: 'إضافة شخص', removePerson: 'إزالة شخص', groupBooking: 'حجز جماعي', leadContact: 'جهة الاتصال الرئيسية', servicesFor: 'خدمات لـ', employeeFor: 'موظف لـ', timeFor: 'وقت لـ', anyoneAvailable: 'أي شخص متاح', services: 'الخدمات النشطة', managerServicesCheckboxes: 'اختر الخدمات التي يقدمها هذا الموظف. سيظهر في الحجز فقط عندما يستطيع تقديم جميع الخدمات المحددة. اتركها كلها دون تحديد للسماح بجميع الخدمات النشطة.', cancelledCount: '{count} ملغى', personNumber: 'شخص {number}',
+      person: 'شخص', addPerson: 'إضافة شخص', removePerson: 'إزالة شخص', groupBooking: 'حجز جماعي', leadContact: 'جهة الاتصال الرئيسية', servicesFor: 'خدمات لـ', employeeFor: 'موظف لـ', timeFor: 'وقت لـ', anyoneAvailable: 'أي شخص متاح', services: 'الخدمات النشطة', managerServicesCheckboxes: 'اختر الخدمات التي يقدمها هذا الموظف. سيظهر في الحجز فقط عندما يستطيع تقديم جميع الخدمات المحددة. اتركها كلها دون تحديد ليبقى غير متاح حتى يتم تعيين الخدمات.', cancelledCount: '{count} ملغى', personNumber: 'شخص {number}',
       swipeToScroll: 'اسحب للتمرير',
   },
 };

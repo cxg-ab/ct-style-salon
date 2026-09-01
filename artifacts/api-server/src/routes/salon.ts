@@ -373,7 +373,7 @@ function isEligibleForServices(
   stylist: Pick<typeof stylistsTable.$inferSelect, "serviceIds">,
   serviceIds: number[],
 ): boolean {
-  return stylist.serviceIds.length === 0 || serviceIds.every((id) => stylist.serviceIds.includes(id));
+  return stylist.serviceIds.length > 0 && serviceIds.every((id) => stylist.serviceIds.includes(id));
 }
 
 function storedPhotoPath(photoUrl: string | null | undefined): string | null {

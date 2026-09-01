@@ -1888,8 +1888,7 @@ function Book() {
   };
 
   const eligibleStylists = stylists.filter(s => {
-    if (!s.serviceIds || s.serviceIds.length === 0) return true;
-    return activePerson.serviceIds.every(sid => s.serviceIds.includes(sid));
+    return Boolean(s.serviceIds?.length) && activePerson.serviceIds.every(sid => s.serviceIds.includes(sid));
   });
 
   const PersonSelector = () => (
