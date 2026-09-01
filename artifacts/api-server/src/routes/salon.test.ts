@@ -302,6 +302,121 @@ test("service management rejects authenticated non-managers", async () => {
   });
 });
 
+test("employee photo uploads require a manager and enforce image limits", async () => {
+  const unauthenticated = await request<{ error: string }>(
+    "/api/storage/uploads/request-url",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: "portrait.png",
+        size: 1024,
+        contentType: "image/png",
+      }),
+    },
+  );
+  assert.equal(unauthenticated.response.status, 401);
+
+  const unsupported = await request<{ error: string }>(
+    "/api/storage/uploads/request-url",
+    {
+      method: "POST",
+      headers: managerHeaders,
+      body: JSON.stringify({
+        name: "portrait.pdf",
+        size: 1024,
+        contentType: "application/pdf",
+      }),
+    },
+  );
+  assert.equal(unsupported.response.status, 400);
+
+  const oversized = await request<{ error: string }>(
+    "/api/storage/uploads/request-url",
+    {
+      method: "POST",
+      headers: managerHeaders,
+      body: JSON.stringify({
+        name: "portrait.png",
+        size: 5 * 1024 * 1024 + 1,
+        contentType: "image/png",
+      }),
+    },
+  );
+  assert.equal(oversized.response.status, 400);
+
+  const valid = await request<{
+    uploadURL: string;
+    objectPath: string;
+    metadata: { name: string; size: number; contentType: string };
+  }>("/api/storage/uploads/request-url", {
+    method: "POST",
+    headers: managerHeaders,
+    body: JSON.stringify({
+      name: "portrait.png",
+      size: 1024,
+      contentType: "image/png",
+    }),
+  });
+  assert.equal(valid.response.status, 200);
+  assert.match(valid.body.uploadURL, /^https?:\/\//);
+  assert.match(valid.body.objectPath, /^\/objects\/uploads\//);
+  assert.deepEqual(valid.body.metadata, {
+    name: "portrait.png",
+    size: 1024,
+    contentType: "image/png",
+  });
+
+  const listed = await request<
+    Array<{
+      id: number;
+      name: string;
+      role: string;
+      bio: string;
+      initials: string;
+      accent: string;
+      photoUrl: string | null;
+      schedule: StylistScheduleEntry[];
+    }>
+  >("/api/stylists");
+  const current = listed.body.find((stylist) => stylist.id === marcoId);
+  assert.ok(current);
+  const originalPhotoUrl = current.photoUrl;
+  try {
+    const updated = await request<{ photoUrl: string | null }>(
+      `/api/stylists/${marcoId}`,
+      {
+        method: "PATCH",
+        headers: managerHeaders,
+        body: JSON.stringify({
+          name: current.name,
+          role: current.role,
+          bio: current.bio,
+          initials: current.initials,
+          accent: current.accent,
+          photoUrl: valid.body.objectPath,
+          schedule: current.schedule,
+        }),
+      },
+    );
+    assert.equal(updated.response.status, 200);
+    assert.equal(updated.body.photoUrl, `/api/storage${valid.body.objectPath}`);
+    const [stored] = await db
+      .select({ photoUrl: stylistsTable.photoUrl })
+      .from(stylistsTable)
+      .where(eq(stylistsTable.id, marcoId));
+    assert.equal(stored?.photoUrl, valid.body.objectPath);
+  } finally {
+    await db
+      .update(stylistsTable)
+      .set({
+        photoUrl: originalPhotoUrl?.startsWith("/api/storage/objects/")
+          ? `/objects/${originalPhotoUrl.slice("/api/storage/objects/".length)}`
+          : originalPhotoUrl,
+      })
+      .where(eq(stylistsTable.id, marcoId));
+  }
+});
+
 test("service management rejects incomplete requests", async () => {
   const incomplete = {
     name: "Incomplete Service",

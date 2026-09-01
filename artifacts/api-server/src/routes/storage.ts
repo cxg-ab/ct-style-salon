@@ -6,6 +6,8 @@ import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage"
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 router.post("/storage/uploads/request-url", async (req: Request, res: Response) => {
   if (!(await requireSalonManager(req, res))) {
@@ -19,7 +21,7 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
   }
 
   const { name, size, contentType } = parsed.data;
-  if (!contentType.startsWith("image/") || size > 5 * 1024 * 1024) {
+  if (!IMAGE_TYPES.has(contentType) || size > MAX_IMAGE_SIZE) {
     res.status(400).json({ error: "Employee photos must be images no larger than 5 MB." });
     return;
   }

@@ -256,8 +256,21 @@ function parseServiceIds(value: unknown): number[] {
 function stylistResponse(row: typeof stylistsTable.$inferSelect) {
   return {
     ...row,
+    photoUrl:
+      row.photoUrl?.startsWith("/objects/")
+        ? `/api/storage${row.photoUrl}`
+        : row.photoUrl,
     schedule: row.schedule ?? [],
   };
+}
+
+function storedPhotoPath(photoUrl: string | null | undefined): string | null {
+  if (!photoUrl) return null;
+  const storagePrefix = "/api/storage/objects/";
+  if (photoUrl.startsWith(storagePrefix)) {
+    return `/objects/${photoUrl.slice(storagePrefix.length)}`;
+  }
+  return photoUrl;
 }
 
 function validateStylistPayload(payload: {
@@ -282,16 +295,22 @@ function validateStylistPayload(payload: {
     return "Initials must be five characters or fewer.";
   }
   if (payload.photoUrl) {
-    if (payload.photoUrl.startsWith("/objects/")) {
-      return validateSchedule(payload.schedule);
-    }
-    try {
-      const url = new URL(payload.photoUrl);
-      if (!["http:", "https:"].includes(url.protocol)) {
-        return "Photo URL must use http or https.";
+    if (
+      payload.photoUrl.startsWith("/objects/") ||
+      payload.photoUrl.startsWith("/api/storage/objects/")
+    ) {
+      if (payload.photoUrl.includes("..")) {
+        return "Enter a valid photo URL.";
       }
-    } catch {
-      return "Enter a valid photo URL.";
+    } else {
+      try {
+        const url = new URL(payload.photoUrl);
+        if (!["http:", "https:"].includes(url.protocol)) {
+          return "Photo URL must use http or https.";
+        }
+      } catch {
+        return "Enter a valid photo URL.";
+      }
     }
   }
   return validateSchedule(payload.schedule);
@@ -498,7 +517,7 @@ router.post("/stylists", async (req, res): Promise<void> => {
       bio: body.data.bio.trim(),
       initials: body.data.initials.trim().toUpperCase(),
       accent: body.data.accent.trim(),
-      photoUrl: body.data.photoUrl?.trim() || null,
+      photoUrl: storedPhotoPath(body.data.photoUrl?.trim()),
       schedule: body.data.schedule,
       active: true,
     })
@@ -573,7 +592,7 @@ router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
       bio: body.data.bio.trim(),
       initials: body.data.initials.trim().toUpperCase(),
       accent: body.data.accent.trim(),
-      photoUrl: body.data.photoUrl?.trim() || null,
+      photoUrl: storedPhotoPath(body.data.photoUrl?.trim()),
       schedule: body.data.schedule,
     })
     .where(and(eq(stylistsTable.id, params.data.stylistId), eq(stylistsTable.active, true)))

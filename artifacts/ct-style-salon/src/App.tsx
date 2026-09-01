@@ -410,6 +410,8 @@ function stylistPhotoSource(photoUrl?: string | null): string | undefined {
   return photoUrl.startsWith('/objects/') ? `/api/storage${photoUrl}` : photoUrl;
 }
 
+const EMPLOYEE_PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
 function uploadFileToStorage(file: File, uploadURL: string, onProgress: (progress: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
@@ -1187,7 +1189,7 @@ function EmployeeProfileEditor({
 
   const choosePhoto = async (file: File | undefined) => {
     if (!file) return;
-    if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) {
+    if (!EMPLOYEE_PHOTO_TYPES.has(file.type) || file.size > 5 * 1024 * 1024) {
       setFeedback(t('photoUploadError'));
       setPhotoUpload({ status: 'error', progress: 0 });
       return;
@@ -1282,8 +1284,8 @@ function EmployeeProfileEditor({
         <div className="sm:col-span-2">
           <p className="text-xs font-semibold">{t('photoUpload')} <span className="font-normal text-[hsl(var(--muted-foreground))]">({t('optional')})</span></p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            {photoPreview ? <img src={photoPreview} alt={t('profilePhoto')} className="h-16 w-16 rounded-full object-cover" /> : <span className="grid h-16 w-16 place-items-center rounded-full bg-[hsl(var(--secondary))] font-display text-lg text-[hsl(var(--card))]">{form.initials || '?'}</span>}
-            <input ref={photoInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => { void choosePhoto(event.target.files?.[0]); event.target.value = ''; }} data-testid="input-employee-photo" />
+            {photoPreview ? <img src={photoPreview} alt={t('profilePhoto')} className="h-16 w-16 rounded-full object-cover" onError={() => setPhotoPreview(undefined)} /> : <span className="grid h-16 w-16 place-items-center rounded-full bg-[hsl(var(--secondary))] font-display text-lg text-[hsl(var(--card))]">{form.initials || '?'}</span>}
+            <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" onChange={(event) => { void choosePhoto(event.target.files?.[0]); event.target.value = ''; }} data-testid="input-employee-photo" />
             <button type="button" onClick={() => photoInputRef.current?.click()} disabled={photoUpload.status === 'uploading'} className="rounded-full border border-[hsl(var(--border))] px-4 py-2.5 text-[11px] font-bold tracking-[.08em] hover:border-[hsl(var(--primary))] disabled:opacity-60" data-testid="button-choose-employee-photo">{photoPreview ? t('replacePhoto') : t('choosePhoto')}</button>
             {photoPreview && <button type="button" onClick={clearPhoto} disabled={photoUpload.status === 'uploading'} className="rounded-full border border-[hsl(var(--destructive)/.35)] px-4 py-2.5 text-[11px] font-bold tracking-[.08em] text-[hsl(var(--destructive))] disabled:opacity-60" data-testid="button-remove-employee-photo">{t('removePhoto')}</button>}
           </div>
