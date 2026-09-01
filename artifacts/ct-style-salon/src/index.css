@@ -1,5 +1,5 @@
 @layer theme, base, clerk, components, utilities;
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Noto+Naskh+Arabic:wght@500;600;700&display=swap');
 @import 'tailwindcss';
 @import '@clerk/themes/shadcn.css';
 @import 'tw-animate-css';
@@ -98,7 +98,7 @@
   --popover: 36 35% 97%;
   --popover-foreground: 26 14% 17%;
   --popover-border: 30 16% 83%;
-  --primary: 20 55% 45%;
+  --primary: 20 55% 40%;
   --primary-foreground: 36 35% 97%;
   --secondary: 26 17% 17%;
   --secondary-foreground: 36 35% 97%;
@@ -115,9 +115,9 @@
   --chart-3: 34 44% 64%;
   --chart-4: 26 14% 17%;
   --chart-5: 30 14% 73%;
-  --app-font-sans: 'DM Sans', sans-serif;
-  --app-font-serif: 'Instrument Serif', Georgia, serif;
-  --app-font-mono: 'DM Mono', monospace;
+  --app-font-sans: 'DM Sans', 'IBM Plex Sans Arabic', sans-serif;
+  --app-font-serif: 'Instrument Serif', 'Noto Naskh Arabic', Georgia, serif;
+  --app-font-mono: 'DM Mono', 'IBM Plex Sans Arabic', monospace;
   --radius: 0.85rem;
   --shadow-2xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0); /*replace with H S L */
   --shadow-xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0); /*replace with H S L */
@@ -268,6 +268,18 @@
 
   html[dir='rtl'] {
     direction: rtl;
+    letter-spacing: normal;
+  }
+
+  html[dir='rtl'] .font-display,
+  html[dir='rtl'] h1,
+  html[dir='rtl'] h2,
+  html[dir='rtl'] h3 {
+    line-height: 1.25;
+  }
+
+  html[dir='rtl'] [class*='tracking-'] {
+    letter-spacing: normal;
   }
 
   html[dir='rtl'] .text-left {
@@ -296,6 +308,17 @@
 }
 
 html { scroll-behavior: smooth; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal,
+  .reveal-delay-1,
+  .reveal-delay-2,
+  .reveal-delay-3,
+  .skeleton {
+    animation: none !important;
+  }
+}
 body {
   background:
     radial-gradient(circle at 11% 3%, hsl(43 73% 63% / .12), transparent 25rem),

@@ -11,6 +11,7 @@ import {
   stylistsTable,
 } from "@workspace/db";
 import type { StylistScheduleEntry } from "../lib/salon-seed";
+import { appointmentLookupCode } from "../lib/booking-access";
 
 const testDate = "2099-09-07";
 const testEmail = "schedule-regression@example.com";
@@ -739,17 +740,72 @@ test("service bundles use combined availability, persist as one appointment, and
     "That time was just booked. Please choose another slot.",
   );
 
+  const openLookup = await request<{ error: string }>(
+    `/api/appointments?email=${encodeURIComponent(bundleEmail)}`,
+  );
+  assert.equal(openLookup.response.status, 401);
+
   const history = await request<Array<{
     serviceIds: number[];
     serviceNames: string[];
     totalDurationMinutes: number;
     totalPrice: number;
-  }>>(`/api/appointments?email=${encodeURIComponent(bundleEmail)}`);
+  }>>(`/api/appointments?email=${encodeURIComponent(bundleEmail)}&lookupCode=${appointmentLookupCode(bundleEmail)}`);
   assert.equal(history.response.status, 200);
   assert.deepEqual(history.body[0]?.serviceIds, [signatureCutId, beardRitualId]);
   assert.deepEqual(history.body[0]?.serviceNames, ["Signature Cut", "Beard Ritual"]);
   assert.equal(history.body[0]?.totalDurationMinutes, bundleDurationMinutes);
   assert.equal(history.body[0]?.totalPrice, bundleTotalPrice);
+});
+
+test("managers can read the appointment book and guests can cancel with a reference", async () => {
+  await updateSchedule(aishaId, scheduleWithMonday("10:00", "18:00"));
+  const created = await request<{
+    id: number;
+    lookupCode: string;
+    emailSent: boolean;
+  }>("/api/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      serviceId: signatureCutId,
+      stylistId: aishaId,
+      customerName: "Book Guest",
+      email: testEmail,
+      phone: "+971500000000",
+      date: testDate,
+      time: "11:30 AM",
+    }),
+  });
+  assert.equal(created.response.status, 201);
+  assert.equal(created.body.lookupCode, appointmentLookupCode(testEmail));
+  assert.equal(created.body.emailSent, false);
+
+  const unauthenticatedBook = await request<{ error: string }>(`/api/appointments?date=${testDate}`);
+  assert.equal(unauthenticatedBook.response.status, 401);
+
+  const book = await request<Array<{ id: number; customerName: string }>>(
+    `/api/appointments?date=${testDate}&stylistId=${aishaId}`,
+    { headers: managerHeaders },
+  );
+  assert.equal(book.response.status, 200);
+  assert.ok(book.body.some((appointment) => appointment.id === created.body.id));
+
+  const cancelled = await request<{ status: string }>(`/api/appointments/${created.body.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      email: testEmail,
+      lookupCode: created.body.lookupCode,
+      status: "cancelled",
+    }),
+  });
+  assert.equal(cancelled.response.status, 200);
+  assert.equal(cancelled.body.status, "cancelled");
+
+  const afterCancel = await request<Array<{ slots: string[] }>>(
+    `/api/availability?date=${testDate}&stylistId=${aishaId}&serviceId=${signatureCutId}`,
+  );
+  assert.equal(afterCancel.response.status, 200);
+  assert.ok(afterCancel.body[0]?.slots.includes("11:30 AM"));
 });
 
 test("services referenced by appointments cannot be deleted", async () => {

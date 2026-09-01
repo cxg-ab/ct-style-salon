@@ -169,6 +169,8 @@ export interface Appointment {
   notes: string | null;
   status: string;
   createdAt: string;
+  lookupCode?: string;
+  emailSent?: boolean;
 }
 
 export interface AppointmentInput {
@@ -216,6 +218,19 @@ serviceIds: number[];
 };
 
 export type ListAppointmentsParams = {
-email: string;
+email?: string;
+lookupCode?: string;
+date?: string;
+from?: string;
+to?: string;
+stylistId?: number;
 };
+
+export interface AppointmentUpdate {
+  email?: string;
+  lookupCode?: string;
+  date?: string;
+  time?: string;
+  status?: 'confirmed' | 'cancelled';
+}
 

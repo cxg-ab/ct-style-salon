@@ -7,5 +7,10 @@
  */
 
 export type ListAppointmentsParams = {
-email: string;
+email?: string;
+lookupCode?: string;
+date?: string;
+from?: string;
+to?: string;
+stylistId?: number;
 };

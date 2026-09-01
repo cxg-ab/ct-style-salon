@@ -1,3 +1,4 @@
+- [Booking loop update](booking-loop-update.md) — Phase 1 UX audit: manager appointment book, gated lookup, cancel/reschedule, honest confirmation. Also summarised in root `AGENTS.md`.
 - [Orval and Zod compatibility](orval-zod-compatibility.md) — generated validators require the workspace Zod major version expected by Orval.
 - [Salon regression fixtures](salon-regression-fixtures.md) — API tests should derive service/stylist assumptions from live records because persisted seed data may be customized.
 - [GitHub sync limitation](github-sync-limitation.md) — GitHub connector reads work, but nested repository writes can be blocked by Cloudflare while root file writes succeed.
