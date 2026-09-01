@@ -25,6 +25,9 @@ const bundleEmail = "bundle-regression@example.com";
 const managerEditEmail = "manager-edit-regression@example.com";
 const lifecycleEmail = "stylist-lifecycle@example.com";
 const uaeBoundaryEmail = "uae-boundary@example.com";
+const groupBookingEmail = "group-booking-regression@example.com";
+const failedGroupBookingEmail = "failed-group-booking-regression@example.com";
+const groupBookingDate = "2099-10-05";
 const serviceTestName = "Automated Service Regression";
 const managerHeaders = { "x-salon-manager": "true" };
 let server: Server;
@@ -40,6 +43,7 @@ let createdServiceId: number | undefined;
 let createdStylistId: number | undefined;
 let originalSchedules = new Map<number, StylistScheduleEntry[]>();
 let originalStylistNames = new Map<number, string>();
+let originalStylistServiceIds = new Map<number, number[]>();
 
 type ApiResult<T> = {
   response: Response;
@@ -83,6 +87,38 @@ async function updateStylistName(
     method: "PATCH",
     headers: managerHeaders,
     body: JSON.stringify({ name }),
+  });
+}
+
+async function updateStylistServiceIds(
+  stylistId: number,
+  serviceIds: number[],
+): Promise<ApiResult<Record<string, unknown>>> {
+  const stylists = await request<Array<{
+    id: number;
+    name: string;
+    role: string;
+    bio: string;
+    initials: string;
+    accent: string;
+    photoUrl: string | null;
+    schedule: StylistScheduleEntry[];
+  }>>("/api/stylists");
+  const stylist = stylists.body.find((entry) => entry.id === stylistId);
+  assert.ok(stylist);
+  return request(`/api/stylists/${stylistId}`, {
+    method: "PATCH",
+    headers: managerHeaders,
+    body: JSON.stringify({
+      name: stylist.name,
+      role: stylist.role,
+      bio: stylist.bio,
+      initials: stylist.initials,
+      accent: stylist.accent,
+      photoUrl: stylist.photoUrl,
+      schedule: stylist.schedule,
+      serviceIds,
+    }),
   });
 }
 
@@ -142,17 +178,20 @@ before(async () => {
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, managerEditEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, lifecycleEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, uaeBoundaryEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, groupBookingEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, failedGroupBookingEmail));
   if (createdStylistId) {
     await db.delete(stylistsTable).where(eq(stylistsTable.id, createdStylistId));
   }
 
   const stylists = await request<
-    Array<{ id: number; name: string; schedule: StylistScheduleEntry[] }>
+    Array<{ id: number; name: string; schedule: StylistScheduleEntry[]; serviceIds: number[] }>
   >("/api/stylists");
   assert.equal(stylists.response.status, 200);
   for (const stylist of stylists.body) {
     originalSchedules.set(stylist.id, stylist.schedule);
     originalStylistNames.set(stylist.id, stylist.name);
+    originalStylistServiceIds.set(stylist.id, stylist.serviceIds);
   }
   const orderedStylists = [...stylists.body].sort((left, right) => left.id - right.id);
   marcoId = orderedStylists[0]?.id ?? 0;
@@ -189,12 +228,17 @@ after(async () => {
   for (const [stylistId, schedule] of originalSchedules) {
     await updateSchedule(stylistId, schedule);
   }
+  for (const [stylistId, serviceIds] of originalStylistServiceIds) {
+    await updateStylistServiceIds(stylistId, serviceIds);
+  }
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, testEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, employeeScopeEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, bundleEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, managerEditEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, lifecycleEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, uaeBoundaryEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, groupBookingEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, failedGroupBookingEmail));
   if (createdServiceId) {
     await db.delete(servicesTable).where(eq(servicesTable.id, createdServiceId));
   }
@@ -718,8 +762,14 @@ test("different employees return different slots for the same date", async () =>
   assert.equal(aisha.response.status, 200);
   assert.deepEqual(marco.body[0]?.stylistId, marcoId);
   assert.deepEqual(aisha.body[0]?.stylistId, aishaId);
-  assert.deepEqual(marco.body[0]?.slots, ["10:00 AM", "11:30 AM", "1:00 PM"]);
-  assert.deepEqual(aisha.body[0]?.slots, ["2:00 PM", "3:30 PM", "5:00 PM"]);
+  assert.deepEqual(marco.body[0]?.slots, [
+    "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM",
+    "12:00 PM", "12:30 PM", "1:00 PM",
+  ]);
+  assert.deepEqual(aisha.body[0]?.slots, [
+    "2:00 PM", "2:30 PM", "3:00 PM", "3:30 PM",
+    "4:00 PM", "4:30 PM", "5:00 PM",
+  ]);
   assert.notDeepEqual(marco.body[0]?.slots, aisha.body[0]?.slots);
 });
 
@@ -804,7 +854,9 @@ test("UAE booking rules stay correct before and after midnight at the five-day b
         `${aishaId}&serviceId=${signatureCutId}`,
     );
     assert.equal(afterMidnight.response.status, 200);
-    assert.deepEqual(afterMidnight.body[0]?.slots, ["1:30 AM"]);
+    assert.deepEqual(afterMidnight.body[0]?.slots, [
+      "12:30 AM", "1:00 AM", "1:30 AM", "2:00 AM",
+    ]);
 
     const firstMinuteBooking = await request<{ date: string; time: string }>(
       "/api/appointments",
@@ -906,7 +958,11 @@ test("recurring breaks are saved and remove overlapping appointment starts", asy
     `/api/availability?date=${testDate}&stylistId=${marcoId}&serviceId=${signatureCutId}`,
   );
   assert.equal(availability.response.status, 200);
-  assert.deepEqual(availability.body[0]?.slots, ["10:00 AM", "1:00 PM", "2:30 PM", "4:00 PM"]);
+  assert.deepEqual(availability.body[0]?.slots, [
+    "10:00 AM", "10:30 AM", "1:00 PM", "1:30 PM",
+    "2:00 PM", "2:30 PM", "3:00 PM", "3:30 PM",
+    "4:00 PM", "4:30 PM", "5:00 PM",
+  ]);
 });
 
 test("break validation rejects invalid and overlapping intervals", async () => {
@@ -1245,4 +1301,163 @@ test("services referenced by appointments cannot be deleted", async () => {
     result.body?.error,
     "This service cannot be deleted because it has existing appointments.",
   );
+});
+
+test("employee service eligibility is saved and enforced during booking", async () => {
+  setSalonClockForTests(() => new Date(`${groupBookingDate}T00:00:00.000Z`));
+  const originalServiceIds = originalStylistServiceIds.get(marcoId) ?? [];
+  try {
+    const updated = await updateStylistServiceIds(marcoId, [signatureCutId]);
+    assert.equal(updated.response.status, 200);
+    assert.deepEqual(updated.body.serviceIds, [signatureCutId]);
+
+    const appointment = await request<{ error: string }>("/api/appointments", {
+      method: "POST",
+      body: JSON.stringify({
+        serviceIds: [beardRitualId],
+        stylistId: marcoId,
+        customerName: "Eligibility Guest",
+        email: "eligibility-regression@example.com",
+        phone: "+971501234567",
+        date: groupBookingDate,
+        time: "10:00 AM",
+      }),
+    });
+    assert.equal(appointment.response.status, 400);
+    assert.equal(
+      appointment.body.error,
+      "That employee does not provide all selected services.",
+    );
+  } finally {
+    await updateStylistServiceIds(marcoId, originalServiceIds);
+    await db.delete(appointmentsTable).where(
+      eq(appointmentsTable.email, "eligibility-regression@example.com"),
+    );
+  }
+});
+
+test("group bookings create linked rows atomically and reject internal overlaps", async () => {
+  setSalonClockForTests(() => new Date(`${groupBookingDate}T00:00:00.000Z`));
+  await updateStylistServiceIds(marcoId, []);
+  await updateStylistServiceIds(aishaId, []);
+  await updateStylistServiceIds(danielId, []);
+  await updateSchedule(marcoId, scheduleWithMonday("09:00", "18:00"));
+  await updateSchedule(aishaId, scheduleWithMonday("09:00", "18:00"));
+  await updateSchedule(danielId, scheduleWithMonday("09:00", "18:00"));
+
+  const marcoAvailability = await request<Array<{ slots: string[] }>>(
+    `/api/availability?date=${groupBookingDate}&stylistId=${marcoId}&serviceIds=${signatureCutId}`,
+  );
+  const aishaAvailability = await request<Array<{ slots: string[] }>>(
+    `/api/availability?date=${groupBookingDate}&stylistId=${aishaId}&serviceIds=${beardRitualId}`,
+  );
+  const firstTime = marcoAvailability.body[0]?.slots[0];
+  const secondTime = aishaAvailability.body[0]?.slots[0];
+  assert.ok(firstTime && secondTime);
+
+  const created = await request<{
+    groupBookingId: string;
+    appointments: Array<{
+      id: number;
+      groupBookingId: string | null;
+      groupPosition: number | null;
+      groupSize: number | null;
+    }>;
+  }>("/api/appointment-groups", {
+    method: "POST",
+    body: JSON.stringify({
+      customerName: "Group Lead",
+      email: groupBookingEmail,
+      phone: "+971501234567",
+      items: [
+        {
+          serviceIds: [signatureCutId],
+          stylistId: marcoId,
+          date: groupBookingDate,
+          time: firstTime,
+        },
+        {
+          serviceIds: [beardRitualId],
+          stylistId: aishaId,
+          date: groupBookingDate,
+          time: secondTime,
+        },
+      ],
+    }),
+  });
+  assert.equal(created.response.status, 201);
+  assert.equal(created.body.appointments.length, 2);
+  assert.deepEqual(
+    created.body.appointments.map((appointment) => appointment.groupPosition),
+    [1, 2],
+  );
+  for (const appointment of created.body.appointments) {
+    assert.equal(appointment.groupBookingId, created.body.groupBookingId);
+    assert.equal(appointment.groupSize, 2);
+  }
+
+  const failed = await request<{ error: string }>("/api/appointment-groups", {
+    method: "POST",
+    body: JSON.stringify({
+      customerName: "Overlapping Group",
+      email: failedGroupBookingEmail,
+      phone: "+971501234567",
+      items: [
+        {
+          serviceIds: [signatureCutId],
+          stylistId: danielId,
+          date: groupBookingDate,
+          time: "10:00 AM",
+        },
+        {
+          serviceIds: [beardRitualId],
+          stylistId: danielId,
+          date: groupBookingDate,
+          time: "10:00 AM",
+        },
+      ],
+    }),
+  });
+  assert.equal(failed.response.status, 400);
+
+  const failedRows = await db
+    .select()
+    .from(appointmentsTable)
+    .where(eq(appointmentsTable.email, failedGroupBookingEmail));
+  assert.equal(failedRows.length, 0);
+});
+
+test("availability offers every 30 minutes and respects the selected service duration", async () => {
+  resetSalonClockForTests();
+  setSalonClockForTests(() => new Date(`${groupBookingDate}T00:00:00.000Z`));
+  const created = await request<{ id: number }>("/api/services", {
+    method: "POST",
+    headers: managerHeaders,
+    body: JSON.stringify({
+      ...servicePayload,
+      name: "Sixty Minute Availability Regression",
+      durationMinutes: 60,
+    }),
+  });
+  assert.equal(created.response.status, 201);
+
+  try {
+    await updateStylistServiceIds(marcoId, []);
+    await updateSchedule(marcoId, scheduleWithMonday("10:00", "18:00"));
+    const availability = await request<Array<{ slots: string[] }>>(
+      `/api/availability?date=${groupBookingDate}&stylistId=${marcoId}&serviceIds=${created.body.id}`,
+    );
+    assert.equal(availability.response.status, 200);
+    assert.deepEqual(availability.body[0]?.slots.slice(0, 4), [
+      "10:00 AM",
+      "10:30 AM",
+      "11:00 AM",
+      "11:30 AM",
+    ]);
+    assert.ok(availability.body[0]?.slots.includes("5:00 PM"));
+    assert.ok(!availability.body[0]?.slots.includes("5:30 PM"));
+  } finally {
+    await deleteService(created.body.id);
+    resetSalonClockForTests();
+  }
 });

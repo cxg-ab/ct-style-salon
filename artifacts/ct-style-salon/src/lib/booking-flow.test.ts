@@ -1,16 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bookingSteps, selectEmployee } from './booking-flow.ts';
+import { bookingSteps } from './booking-flow.ts';
 
-test('booking steps keep employee selection first', () => {
-  assert.deepEqual(bookingSteps, ['Employee', 'Service', 'Date & time', 'Details']);
-});
-
-test('choosing a different employee clears dependent selections', () => {
-  assert.deepEqual(selectEmployee(7), {
-    stylistId: 7,
-    serviceIds: [],
-    time: '',
-    step: 2,
-  });
+test('booking steps order', () => {
+  assert.deepEqual(bookingSteps, ['Service', 'Employee', 'Date & time', 'Details']);
 });

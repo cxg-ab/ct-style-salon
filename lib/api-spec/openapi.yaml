@@ -483,6 +483,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /appointment-groups:
+    post:
+      operationId: createAppointmentGroup
+      tags: [salon]
+      summary: Create an atomic group booking of up to five appointments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupBookingInput"
+      responses:
+        "201":
+          description: Group booking created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupBooking"
+        "400":
+          description: Invalid or unavailable group booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /appointments/{appointmentId}:
     patch:
       operationId: updateAppointment
@@ -802,6 +826,10 @@ components:
           nullable: true
         active:
           type: boolean
+        serviceIds:
+          type: array
+          items:
+            type: integer
         schedule:
           type: array
           items:
@@ -814,6 +842,7 @@ components:
         - initials
         - accent
         - active
+        - serviceIds
         - schedule
     StylistInput:
       type: object
@@ -840,6 +869,12 @@ components:
           maxItems: 21
           items:
             $ref: "#/components/schemas/StylistScheduleEntry"
+        serviceIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
       required:
         - name
         - role
@@ -870,6 +905,12 @@ components:
           maxItems: 21
           items:
             $ref: "#/components/schemas/StylistScheduleEntry"
+        serviceIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
       required:
         - name
         - role
@@ -984,6 +1025,12 @@ components:
         createdAt:
           type: string
           format: date-time
+        groupBookingId:
+          type: ["string", "null"]
+        groupPosition:
+          type: ["integer", "null"]
+        groupSize:
+          type: ["integer", "null"]
       required:
         - id
         - serviceId
@@ -1002,6 +1049,72 @@ components:
         - notes
         - status
         - createdAt
+        - groupBookingId
+        - groupPosition
+        - groupSize
+    GroupBooking:
+      type: object
+      properties:
+        groupBookingId:
+          type: string
+        appointments:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/Appointment"
+      required:
+        - groupBookingId
+        - appointments
+    GroupBookingInput:
+      type: object
+      properties:
+        customerName:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          minLength: 7
+        items:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/GroupBookingItemInput"
+      required:
+        - customerName
+        - email
+        - phone
+        - items
+    GroupBookingItemInput:
+      type: object
+      properties:
+        serviceIds:
+          type: array
+          minItems: 1
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+        stylistId:
+          type: integer
+          minimum: 1
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+        notes:
+          type: ["string", "null"]
+      required:
+        - serviceIds
+        - stylistId
+        - date
+        - time
     AppointmentInput:
       type: object
       properties:

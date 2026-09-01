@@ -99,6 +99,7 @@ export interface Stylist {
   accent: string;
   photoUrl?: string | null;
   active: boolean;
+  serviceIds: number[];
   schedule: StylistScheduleEntry[];
 }
 
@@ -115,6 +116,8 @@ export interface StylistInput {
   photoUrl?: string | null;
   /** @maxItems 21 */
   schedule: StylistScheduleEntry[];
+  /** @items.minimum 1 */
+  serviceIds?: number[];
 }
 
 export interface StylistUpdate {
@@ -130,6 +133,8 @@ export interface StylistUpdate {
   photoUrl?: string | null;
   /** @maxItems 21 */
   schedule: StylistScheduleEntry[];
+  /** @items.minimum 1 */
+  serviceIds?: number[];
 }
 
 export interface StylistScheduleUpdate {
@@ -168,6 +173,49 @@ export interface Appointment {
   notes: string | null;
   status: string;
   createdAt: string;
+  /** @nullable */
+  groupBookingId: string | null;
+  /** @nullable */
+  groupPosition: number | null;
+  /** @nullable */
+  groupSize: number | null;
+}
+
+export interface GroupBooking {
+  groupBookingId: string;
+  /**
+     * @minItems 1
+     * @maxItems 5
+     */
+  appointments: Appointment[];
+}
+
+export interface GroupBookingItemInput {
+  /**
+     * @minItems 1
+     * @maxItems 10
+     * @items.minimum 1
+     */
+  serviceIds: number[];
+  /** @minimum 1 */
+  stylistId: number;
+  date: string;
+  time: string;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface GroupBookingInput {
+  /** @minLength 2 */
+  customerName: string;
+  email: string;
+  /** @minLength 7 */
+  phone: string;
+  /**
+     * @minItems 1
+     * @maxItems 5
+     */
+  items: GroupBookingItemInput[];
 }
 
 export interface AppointmentInput {

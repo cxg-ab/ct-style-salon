@@ -31,4 +31,10 @@ export interface Appointment {
   notes: string | null;
   status: string;
   createdAt: Date;
+  /** @nullable */
+  groupBookingId: string | null;
+  /** @nullable */
+  groupPosition: number | null;
+  /** @nullable */
+  groupSize: number | null;
 }

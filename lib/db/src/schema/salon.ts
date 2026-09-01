@@ -42,6 +42,8 @@ export const stylistsTable = pgTable("salon_stylists", {
     .notNull()
     .default([]),
   active: boolean("active").notNull().default(true),
+  // Empty preserves the legacy behavior: the employee can perform any service.
+  serviceIds: integer("service_ids").array().notNull().default(sql`ARRAY[]::integer[]`),
 });
 
 export const appointmentsTable = pgTable("salon_appointments", {
@@ -61,6 +63,9 @@ export const appointmentsTable = pgTable("salon_appointments", {
   time: text("time").notNull(),
   notes: text("notes"),
   status: text("status").notNull().default("confirmed"),
+  groupBookingId: text("group_booking_id"),
+  groupPosition: integer("group_position"),
+  groupSize: integer("group_size"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

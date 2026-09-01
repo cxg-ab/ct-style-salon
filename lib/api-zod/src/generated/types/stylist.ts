@@ -16,5 +16,6 @@ export interface Stylist {
   accent: string;
   photoUrl?: string | null;
   active: boolean;
+  serviceIds: number[];
   schedule: StylistScheduleEntry[];
 }

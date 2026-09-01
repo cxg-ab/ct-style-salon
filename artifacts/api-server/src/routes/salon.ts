@@ -3,6 +3,8 @@ import { clerkClient, getAuth } from "@clerk/express";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   CreateAppointmentBody,
+  CreateAppointmentGroupBody,
+  CreateAppointmentGroupResponse,
   CreateAppointmentResponse,
   CreateServiceBody,
   CreateServiceResponse,
@@ -96,7 +98,7 @@ function slotsForSchedule(
   for (const entry of schedule.filter((item) => item.dayOfWeek === weekday)) {
     const open = scheduleTimeToMinutes(entry.openTime);
     const close = scheduleTimeToMinutes(entry.closeTime);
-    for (let start = open; start + durationMinutes <= close; start += 90) {
+    for (let start = open; start + durationMinutes <= close; start += 30) {
       const overlapsBreak = (entry.breaks ?? []).some((breakTime) => {
         const breakStart = scheduleTimeToMinutes(breakTime.startTime);
         const breakEnd = scheduleTimeToMinutes(breakTime.endTime);
@@ -363,7 +365,15 @@ function stylistResponse(row: typeof stylistsTable.$inferSelect) {
         ? `/api/storage${row.photoUrl}`
         : row.photoUrl,
     schedule: row.schedule ?? [],
+    serviceIds: row.serviceIds ?? [],
   };
+}
+
+function isEligibleForServices(
+  stylist: Pick<typeof stylistsTable.$inferSelect, "serviceIds">,
+  serviceIds: number[],
+): boolean {
+  return stylist.serviceIds.length === 0 || serviceIds.every((id) => stylist.serviceIds.includes(id));
 }
 
 function storedPhotoPath(photoUrl: string | null | undefined): string | null {
@@ -415,6 +425,7 @@ function validateStylistPayload(payload: {
   accent: string;
   photoUrl?: string | null;
   schedule: StylistScheduleEntry[];
+  serviceIds?: number[];
 }): string | undefined {
   if (
     !payload.name.trim() ||
@@ -427,11 +438,12 @@ function validateStylistPayload(payload: {
     return "Initials must be five characters or fewer.";
   }
   if (payload.photoUrl) {
-    if (
-      payload.photoUrl.startsWith("/objects/") ||
-      payload.photoUrl.startsWith("/api/storage/objects/")
-    ) {
-      if (payload.photoUrl.includes("..")) {
+    if (payload.photoUrl.startsWith("/")) {
+      if (
+        payload.photoUrl.startsWith("//") ||
+        payload.photoUrl.includes("..") ||
+        payload.photoUrl.includes("\\")
+      ) {
         return "Enter a valid photo URL.";
       }
     } else {
@@ -446,6 +458,12 @@ function validateStylistPayload(payload: {
     }
   }
   return validateSchedule(payload.schedule);
+}
+
+async function validateStylistServiceIds(serviceIds: number[]): Promise<boolean> {
+  if (serviceIds.length === 0) return true;
+  const rows = await db.select({ id: servicesTable.id }).from(servicesTable).where(inArray(servicesTable.id, serviceIds));
+  return rows.length === serviceIds.length;
 }
 
 router.get("/services", async (_req, res): Promise<void> => {
@@ -580,7 +598,7 @@ router.delete("/services/:serviceId", async (req, res): Promise<void> => {
     return;
   }
 
-  await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(${params.data.serviceId})`);
     const [service] = await tx
       .select({ id: servicesTable.id })
@@ -588,8 +606,7 @@ router.delete("/services/:serviceId", async (req, res): Promise<void> => {
       .where(eq(servicesTable.id, params.data.serviceId))
       .limit(1);
     if (!service) {
-      res.status(404).json({ error: "Service not found." });
-      return;
+      return { status: 404 as const, error: "Service not found." };
     }
 
     const [appointment] = await tx
@@ -603,13 +620,26 @@ router.delete("/services/:serviceId", async (req, res): Promise<void> => {
       )
       .limit(1);
     if (appointment) {
-      res.status(409).json({ error: "This service cannot be deleted because it has existing appointments." });
-      return;
+      return {
+        status: 409 as const,
+        error: "This service cannot be deleted because it has existing appointments.",
+      };
     }
 
     await tx.delete(servicesTable).where(eq(servicesTable.id, service.id));
-    res.status(204).send();
+    const stylists = await tx.select().from(stylistsTable);
+    for (const stylist of stylists.filter((entry) => entry.serviceIds.includes(service.id))) {
+      await tx.update(stylistsTable)
+        .set({ serviceIds: stylist.serviceIds.filter((id) => id !== service.id) })
+        .where(eq(stylistsTable.id, stylist.id));
+    }
+    return { status: 204 as const };
   });
+  if (result.status !== 204) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.status(204).send();
 });
 
 router.get("/stylists", async (_req, res): Promise<void> => {
@@ -640,6 +670,10 @@ router.post("/stylists", async (req, res): Promise<void> => {
     res.status(400).json({ error: validationError });
     return;
   }
+  if (!(await validateStylistServiceIds(body.data.serviceIds ?? []))) {
+    res.status(400).json({ error: "Choose valid services for this employee." });
+    return;
+  }
 
   const [created] = await db
     .insert(stylistsTable)
@@ -651,6 +685,7 @@ router.post("/stylists", async (req, res): Promise<void> => {
       accent: body.data.accent.trim(),
       photoUrl: storedPhotoPath(body.data.photoUrl?.trim()),
       schedule: body.data.schedule,
+      serviceIds: body.data.serviceIds ?? [],
       active: true,
     })
     .returning();
@@ -715,9 +750,13 @@ router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
     res.status(400).json({ error: validationError });
     return;
   }
+  if (!(await validateStylistServiceIds(body.data.serviceIds ?? []))) {
+    res.status(400).json({ error: "Choose valid services for this employee." });
+    return;
+  }
 
   const [existing] = await db
-    .select({ photoUrl: stylistsTable.photoUrl })
+    .select({ photoUrl: stylistsTable.photoUrl, serviceIds: stylistsTable.serviceIds })
     .from(stylistsTable)
     .where(and(eq(stylistsTable.id, params.data.stylistId), eq(stylistsTable.active, true)))
     .limit(1);
@@ -737,6 +776,7 @@ router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
       accent: body.data.accent.trim(),
       photoUrl: nextPhotoUrl,
       schedule: body.data.schedule,
+      serviceIds: body.data.serviceIds ?? existing.serviceIds,
     })
     .where(and(eq(stylistsTable.id, params.data.stylistId), eq(stylistsTable.active, true)))
     .returning();
@@ -832,7 +872,7 @@ router.get("/availability", async (req, res): Promise<void> => {
 
   const date = String(req.query.date);
   const stylistRows = await db
-    .select({ id: stylistsTable.id, name: stylistsTable.name, schedule: stylistsTable.schedule })
+    .select({ id: stylistsTable.id, name: stylistsTable.name, schedule: stylistsTable.schedule, serviceIds: stylistsTable.serviceIds })
     .from(stylistsTable)
     .where(
       and(
@@ -853,6 +893,10 @@ router.get("/availability", async (req, res): Promise<void> => {
     .where(inArray(servicesTable.id, parsed.data.serviceIds));
   if (serviceRows.length !== parsed.data.serviceIds.length) {
     res.status(400).json({ error: "Choose valid services." });
+    return;
+  }
+  if (!isEligibleForServices(stylist, parsed.data.serviceIds)) {
+    res.status(400).json({ error: "That employee does not provide all selected services." });
     return;
   }
   const durationMinutes = serviceRows.reduce(
@@ -976,7 +1020,7 @@ router.post("/appointments", async (req, res): Promise<void> => {
 
   const clerkUserId = getAuth(req)?.userId ?? null;
 
-  await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(${body.data.stylistId})`);
     const serviceRows = await tx
       .select()
@@ -996,8 +1040,16 @@ router.post("/appointments", async (req, res): Promise<void> => {
       serviceRows.length !== body.data.serviceIds.length ||
       !stylist[0]
     ) {
-      res.status(400).json({ error: "That service or stylist is no longer available." });
-      return;
+      return {
+        status: 400 as const,
+        error: "That service or stylist is no longer available.",
+      };
+    }
+    if (!isEligibleForServices(stylist[0], body.data.serviceIds)) {
+      return {
+        status: 400 as const,
+        error: "That employee does not provide all selected services.",
+      };
     }
     const durationMinutes = serviceRows.reduce(
       (total, service) => total + service.durationMinutes,
@@ -1024,11 +1076,15 @@ router.post("/appointments", async (req, res): Promise<void> => {
           }),
         );
       if (breakConflict) {
-        res.status(400).json({ error: "That employee is on a break at the selected time." });
-        return;
+        return {
+          status: 400 as const,
+          error: "That employee is on a break at the selected time.",
+        };
       }
-      res.status(400).json({ error: "That employee is not scheduled for the selected time." });
-      return;
+      return {
+        status: 400 as const,
+        error: "That employee is not scheduled for the selected time.",
+      };
     }
 
     const existingAppointments = await tx
@@ -1064,8 +1120,10 @@ router.post("/appointments", async (req, res): Promise<void> => {
         },
         "Appointment rejected because the selected employee has an overlapping appointment",
       );
-      res.status(400).json({ error: "That time was just booked. Please choose another slot." });
-      return;
+      return {
+        status: 400 as const,
+        error: "That time was just booked. Please choose another slot.",
+      };
     }
 
     const [created] = await tx
@@ -1087,12 +1145,109 @@ router.post("/appointments", async (req, res): Promise<void> => {
       })
       .returning();
 
-    res.status(201).json(
-      CreateAppointmentResponse.parse(
+    return {
+      status: 201 as const,
+      body: CreateAppointmentResponse.parse(
         appointmentResponse(created, serviceRows, stylist[0].name),
       ),
-    );
+    };
   });
+  if (result.status !== 201) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.status(201).json(result.body);
+});
+
+router.post("/appointment-groups", async (req, res): Promise<void> => {
+  await ensureSalonSeeded();
+  const body = CreateAppointmentGroupBody.safeParse({
+    ...req.body,
+    items: Array.isArray(req.body?.items)
+      ? req.body.items.map((item: Record<string, unknown>) => ({
+          ...item,
+          serviceIds: parseServiceIds(item.serviceIds),
+          date: toDate(item.date),
+          notes: item.notes ?? null,
+        }))
+      : req.body?.items,
+  });
+  if (!body.success) {
+    res.status(400).json({ error: "Check every group booking detail and try again." });
+    return;
+  }
+  for (const item of body.data.items) {
+    if (process.env.NODE_ENV !== "test" && !isWithinBookingWindow(item.date)) {
+      res.status(400).json({ error: "Appointments can only be booked within the next five days." });
+      return;
+    }
+    const date = item.date.toISOString().slice(0, 10);
+    if (!isFutureUaeSlot(date, item.time)) {
+      res.status(400).json({ error: "That appointment time has already passed in the UAE." });
+      return;
+    }
+  }
+
+  const groupBookingId = crypto.randomUUID();
+  const clerkUserId = getAuth(req)?.userId ?? null;
+  const result = await db.transaction(async (tx) => {
+    const stylistIds = [...new Set(body.data.items.map((item) => item.stylistId))].sort((a, b) => a - b);
+    for (const stylistId of stylistIds) {
+      await tx.execute(sql`select pg_advisory_xact_lock(${stylistId})`);
+    }
+    const prepared: Array<{
+      item: any;
+      date: string;
+      durationMinutes: number;
+      totalPrice: number;
+      stylist: typeof stylistsTable.$inferSelect;
+      services: Array<typeof servicesTable.$inferSelect>;
+    }> = [];
+    for (const item of body.data.items) {
+      const services = await tx.select().from(servicesTable).where(inArray(servicesTable.id, item.serviceIds));
+      const [stylist] = await tx.select().from(stylistsTable)
+        .where(and(eq(stylistsTable.id, item.stylistId), eq(stylistsTable.active, true))).limit(1);
+      if (!stylist || services.length !== item.serviceIds.length || !isEligibleForServices(stylist, item.serviceIds)) {
+        return { error: "That service or employee is no longer available." };
+      }
+      const durationMinutes = services.reduce((total, service) => total + service.durationMinutes, 0);
+      const date = item.date.toISOString().slice(0, 10);
+      if (!slotsForSchedule(stylist.schedule ?? [], item.date.getUTCDay(), durationMinutes).includes(item.time)) {
+        return { error: "That employee is not scheduled for the selected time." };
+      }
+      const existing = await tx.select({
+        time: appointmentsTable.time, durationMinutes: appointmentsTable.totalDurationMinutes,
+        legacyDurationMinutes: servicesTable.durationMinutes,
+      }).from(appointmentsTable).innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
+        .where(and(eq(appointmentsTable.stylistId, item.stylistId), eq(appointmentsTable.date, date),
+          ne(appointmentsTable.status, "cancelled"), ne(appointmentsTable.status, "completed")));
+      if (existing.some((appointment) => appointmentTimesOverlap(item.time, durationMinutes, {
+        time: appointment.time, durationMinutes: appointment.durationMinutes ?? appointment.legacyDurationMinutes,
+      })) || prepared.some((other) => other.item.stylistId === item.stylistId && other.date === date &&
+        appointmentTimesOverlap(item.time, durationMinutes, { time: other.item.time, durationMinutes: other.durationMinutes }))) {
+        return { error: "A group appointment overlaps an existing or another group appointment." };
+      }
+      prepared.push({ item, date, durationMinutes, totalPrice: services.reduce((total, service) => total + Number(service.price), 0), stylist, services });
+    }
+    const created = [];
+    for (const [index, entry] of prepared.entries()) {
+      const [appointment] = await tx.insert(appointmentsTable).values({
+        serviceId: entry.item.serviceIds[0], serviceIds: entry.item.serviceIds,
+        totalDurationMinutes: entry.durationMinutes, totalPrice: entry.totalPrice.toFixed(2),
+        stylistId: entry.item.stylistId, customerName: body.data.customerName.trim(),
+        email: body.data.email.toLowerCase(), phone: body.data.phone.trim(), clerkUserId,
+        date: entry.date, time: entry.item.time, notes: entry.item.notes ?? null, status: "confirmed",
+        groupBookingId, groupPosition: index + 1, groupSize: prepared.length,
+      }).returning();
+      created.push(appointmentResponse(appointment, entry.services, entry.stylist.name));
+    }
+    return { groupBookingId, appointments: created };
+  });
+  if ("error" in result) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.status(201).json(CreateAppointmentGroupResponse.parse(result));
 });
 
 router.patch("/appointments/:appointmentId", async (req, res): Promise<void> => {
@@ -1152,6 +1307,15 @@ router.patch("/appointments/:appointmentId", async (req, res): Promise<void> => 
     );
     if (serviceRows.length !== serviceIds.length || durationMinutes < 1) {
       res.status(400).json({ error: "The services on this appointment are no longer available." });
+      return;
+    }
+    const [rescheduleStylist] = await tx
+      .select({ serviceIds: stylistsTable.serviceIds })
+      .from(stylistsTable)
+      .where(and(eq(stylistsTable.id, current.appointment.stylistId), eq(stylistsTable.active, true)))
+      .limit(1);
+    if (!rescheduleStylist || !isEligibleForServices(rescheduleStylist, serviceIds)) {
+      res.status(400).json({ error: "That employee no longer provides all services on this appointment." });
       return;
     }
 
@@ -1335,6 +1499,10 @@ router.patch("/manager/appointments/:appointmentId", async (req, res): Promise<v
       .limit(1);
     if (serviceRows.length !== nextServiceIds.length || !stylist) {
       res.status(400).json({ error: "Choose active services and an active employee." });
+      return;
+    }
+    if (!isEligibleForServices(stylist, nextServiceIds)) {
+      res.status(400).json({ error: "That employee does not provide all selected services." });
       return;
     }
 

@@ -20,4 +20,6 @@ export interface StylistUpdate {
   photoUrl?: string | null;
   /** @maxItems 21 */
   schedule: StylistScheduleEntry[];
+  /** @items.minimum 1 */
+  serviceIds?: number[];
 }

@@ -171,6 +171,7 @@ export const ListStylistsResponseItem = zod.object({
   "accent": zod.string(),
   "photoUrl": zod.string().nullish(),
   "active": zod.boolean(),
+  "serviceIds": zod.array(zod.int()),
   "schedule": zod.array(zod.object({
   "dayOfWeek": zod.int().min(listStylistsResponseScheduleItemDayOfWeekMin).max(listStylistsResponseScheduleItemDayOfWeekMax),
   "openTime": zod.string().regex(listStylistsResponseScheduleItemOpenTimeRegExp),
@@ -205,6 +206,7 @@ export const createStylistBodyScheduleMax = 21;
 
 
 
+
 export const CreateStylistBody = zod.object({
   "name": zod.string().min(1),
   "role": zod.string().min(1),
@@ -220,7 +222,8 @@ export const CreateStylistBody = zod.object({
   "startTime": zod.string().regex(createStylistBodyScheduleItemBreaksItemStartTimeRegExp),
   "endTime": zod.string().regex(createStylistBodyScheduleItemBreaksItemEndTimeRegExp)
 })).max(createStylistBodyScheduleItemBreaksMax).optional()
-})).max(createStylistBodyScheduleMax)
+})).max(createStylistBodyScheduleMax),
+  "serviceIds": zod.array(zod.int().min(1)).optional()
 })
 
 export const createStylistResponseScheduleItemDayOfWeekMin = 0;
@@ -243,6 +246,7 @@ export const CreateStylistResponse = zod.object({
   "accent": zod.string(),
   "photoUrl": zod.string().nullish(),
   "active": zod.boolean(),
+  "serviceIds": zod.array(zod.int()),
   "schedule": zod.array(zod.object({
   "dayOfWeek": zod.int().min(createStylistResponseScheduleItemDayOfWeekMin).max(createStylistResponseScheduleItemDayOfWeekMax),
   "openTime": zod.string().regex(createStylistResponseScheduleItemOpenTimeRegExp),
@@ -280,6 +284,7 @@ export const updateStylistBodyScheduleMax = 21;
 
 
 
+
 export const UpdateStylistBody = zod.object({
   "name": zod.string().min(1),
   "role": zod.string().min(1),
@@ -295,7 +300,8 @@ export const UpdateStylistBody = zod.object({
   "startTime": zod.string().regex(updateStylistBodyScheduleItemBreaksItemStartTimeRegExp),
   "endTime": zod.string().regex(updateStylistBodyScheduleItemBreaksItemEndTimeRegExp)
 })).max(updateStylistBodyScheduleItemBreaksMax).optional()
-})).max(updateStylistBodyScheduleMax)
+})).max(updateStylistBodyScheduleMax),
+  "serviceIds": zod.array(zod.int().min(1)).optional()
 })
 
 export const updateStylistResponseScheduleItemDayOfWeekMin = 0;
@@ -318,6 +324,7 @@ export const UpdateStylistResponse = zod.object({
   "accent": zod.string(),
   "photoUrl": zod.string().nullish(),
   "active": zod.boolean(),
+  "serviceIds": zod.array(zod.int()),
   "schedule": zod.array(zod.object({
   "dayOfWeek": zod.int().min(updateStylistResponseScheduleItemDayOfWeekMin).max(updateStylistResponseScheduleItemDayOfWeekMax),
   "openTime": zod.string().regex(updateStylistResponseScheduleItemOpenTimeRegExp),
@@ -358,6 +365,7 @@ export const DeleteStylistResponse = zod.object({
   "accent": zod.string(),
   "photoUrl": zod.string().nullish(),
   "active": zod.boolean(),
+  "serviceIds": zod.array(zod.int()),
   "schedule": zod.array(zod.object({
   "dayOfWeek": zod.int().min(deleteStylistResponseScheduleItemDayOfWeekMin).max(deleteStylistResponseScheduleItemDayOfWeekMax),
   "openTime": zod.string().regex(deleteStylistResponseScheduleItemOpenTimeRegExp),
@@ -422,6 +430,7 @@ export const UpdateStylistScheduleResponse = zod.object({
   "accent": zod.string(),
   "photoUrl": zod.string().nullish(),
   "active": zod.boolean(),
+  "serviceIds": zod.array(zod.int()),
   "schedule": zod.array(zod.object({
   "dayOfWeek": zod.int().min(updateStylistScheduleResponseScheduleItemDayOfWeekMin).max(updateStylistScheduleResponseScheduleItemDayOfWeekMax),
   "openTime": zod.string().regex(updateStylistScheduleResponseScheduleItemOpenTimeRegExp),
@@ -487,7 +496,10 @@ export const ListAppointmentsResponseItem = zod.object({
   "time": zod.string(),
   "notes": zod.string().nullable(),
   "status": zod.string(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "groupBookingId": zod.string().nullable(),
+  "groupPosition": zod.int().nullable(),
+  "groupSize": zod.int().nullable()
 })
 export const ListAppointmentsResponse = zod.array(ListAppointmentsResponseItem)
 
@@ -540,7 +552,74 @@ export const CreateAppointmentResponse = zod.object({
   "time": zod.string(),
   "notes": zod.string().nullable(),
   "status": zod.string(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "groupBookingId": zod.string().nullable(),
+  "groupPosition": zod.int().nullable(),
+  "groupSize": zod.int().nullable()
+})
+
+
+/**
+ * @summary Create an atomic group booking of up to five appointments
+ */
+export const createAppointmentGroupBodyCustomerNameMin = 2;
+
+export const createAppointmentGroupBodyPhoneMin = 7;
+
+
+export const createAppointmentGroupBodyItemsItemServiceIdsMax = 10;
+
+
+export const createAppointmentGroupBodyItemsMax = 5;
+
+
+
+export const CreateAppointmentGroupBody = zod.object({
+  "customerName": zod.string().min(createAppointmentGroupBodyCustomerNameMin),
+  "email": zod.email(),
+  "phone": zod.string().min(createAppointmentGroupBodyPhoneMin),
+  "items": zod.array(zod.object({
+  "serviceIds": zod.array(zod.int().min(1)).min(1).max(createAppointmentGroupBodyItemsItemServiceIdsMax),
+  "stylistId": zod.int().min(1),
+  "date": zod.coerce.date(),
+  "time": zod.string(),
+  "notes": zod.string().nullish()
+})).min(1).max(createAppointmentGroupBodyItemsMax)
+})
+
+
+
+
+export const createAppointmentGroupResponseAppointmentsItemTotalPriceMin = 0;
+
+export const createAppointmentGroupResponseAppointmentsMax = 5;
+
+
+
+export const CreateAppointmentGroupResponse = zod.object({
+  "groupBookingId": zod.string(),
+  "appointments": zod.array(zod.object({
+  "id": zod.int(),
+  "serviceId": zod.int().describe('First service in the bundle, retained for backwards compatibility.'),
+  "serviceIds": zod.array(zod.int()).min(1),
+  "serviceNames": zod.array(zod.string()).min(1),
+  "serviceName": zod.string().describe('Comma-separated service names, retained for backwards compatibility.'),
+  "totalDurationMinutes": zod.int().min(1),
+  "totalPrice": zod.number().min(createAppointmentGroupResponseAppointmentsItemTotalPriceMin),
+  "stylistId": zod.int(),
+  "stylistName": zod.string(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "date": zod.coerce.date(),
+  "time": zod.string(),
+  "notes": zod.string().nullable(),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "groupBookingId": zod.string().nullable(),
+  "groupPosition": zod.int().nullable(),
+  "groupSize": zod.int().nullable()
+})).min(1).max(createAppointmentGroupResponseAppointmentsMax)
 })
 
 
@@ -580,7 +659,10 @@ export const UpdateAppointmentResponse = zod.object({
   "time": zod.string(),
   "notes": zod.string().nullable(),
   "status": zod.string(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "groupBookingId": zod.string().nullable(),
+  "groupPosition": zod.int().nullable(),
+  "groupSize": zod.int().nullable()
 })
 
 
@@ -615,7 +697,10 @@ export const CancelAppointmentResponse = zod.object({
   "time": zod.string(),
   "notes": zod.string().nullable(),
   "status": zod.string(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "groupBookingId": zod.string().nullable(),
+  "groupPosition": zod.int().nullable(),
+  "groupSize": zod.int().nullable()
 })
 
 
@@ -646,7 +731,10 @@ export const ListManagerAppointmentsResponseItem = zod.object({
   "time": zod.string(),
   "notes": zod.string().nullable(),
   "status": zod.string(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "groupBookingId": zod.string().nullable(),
+  "groupPosition": zod.int().nullable(),
+  "groupSize": zod.int().nullable()
 })
 export const ListManagerAppointmentsResponse = zod.array(ListManagerAppointmentsResponseItem)
 
@@ -704,7 +792,10 @@ export const UpdateManagerAppointmentResponse = zod.object({
   "time": zod.string(),
   "notes": zod.string().nullable(),
   "status": zod.string(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "groupBookingId": zod.string().nullable(),
+  "groupPosition": zod.int().nullable(),
+  "groupSize": zod.int().nullable()
 })
 
 

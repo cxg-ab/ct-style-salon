@@ -27,6 +27,8 @@ import type {
   Customer,
   ErrorResponse,
   GetAvailabilityParams,
+  GroupBooking,
+  GroupBookingInput,
   HealthStatus,
   ListAppointmentsParams,
   ManagerAppointmentUpdate,
@@ -1195,6 +1197,77 @@ export const useCreateAppointment = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getCreateAppointmentMutationOptions(options));
+    }
+
+export const getCreateAppointmentGroupUrl = () => {
+
+
+
+
+  return `/api/appointment-groups`
+}
+
+/**
+ * @summary Create an atomic group booking of up to five appointments
+ */
+export const createAppointmentGroup = async (groupBookingInput: GroupBookingInput, options?: Parameters<typeof customFetch>[1]): Promise<GroupBooking> => {
+
+  return customFetch<GroupBooking>(getCreateAppointmentGroupUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(groupBookingInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAppointmentGroupMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAppointmentGroup>>, TError,{data: BodyType<GroupBookingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAppointmentGroup>>, TError,{data: BodyType<GroupBookingInput>}, TContext> => {
+
+const mutationKey = ['createAppointmentGroup'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAppointmentGroup>>, {data: BodyType<GroupBookingInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAppointmentGroup(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAppointmentGroupMutationResult = NonNullable<Awaited<ReturnType<typeof createAppointmentGroup>>>
+    export type CreateAppointmentGroupMutationBody = BodyType<GroupBookingInput>
+    export type CreateAppointmentGroupMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create an atomic group booking of up to five appointments
+ */
+export const useCreateAppointmentGroup = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAppointmentGroup>>, TError,{data: BodyType<GroupBookingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAppointmentGroup>>,
+        TError,
+        {data: BodyType<GroupBookingInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAppointmentGroupMutationOptions(options));
     }
 
 export const getUpdateAppointmentUrl = (appointmentId: number,) => {

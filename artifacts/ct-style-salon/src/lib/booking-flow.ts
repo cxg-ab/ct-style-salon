@@ -1,4 +1,4 @@
-export const bookingSteps = ['Employee', 'Service', 'Date & time', 'Details'] as const;
+export const bookingSteps = ['Service', 'Employee', 'Date & time', 'Details'] as const;
 
 export type BookingSelection = {
   stylistId?: number;
@@ -6,12 +6,3 @@ export type BookingSelection = {
   time: string;
   step: number;
 };
-
-export function selectEmployee(stylistId: number): BookingSelection {
-  return {
-    stylistId,
-    serviceIds: [],
-    time: '',
-    step: 2,
-  };
-}

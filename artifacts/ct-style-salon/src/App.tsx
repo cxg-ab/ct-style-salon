@@ -39,6 +39,7 @@ import {
   useCancelAppointment,
   useCreateStylist,
   useCreateAppointment,
+  useCreateAppointmentGroup,
   useCreateService,
   useGetAvailability,
   useGetSalonSummary,
@@ -59,6 +60,7 @@ import {
   type Service,
   type ServiceInput,
   type Appointment,
+  type GroupBooking,
   type Stylist,
   type StylistInput,
   type StylistScheduleEntry,
@@ -68,7 +70,7 @@ import {
 import storefrontImage from '@assets/WhatsApp_Image_2026-08-31_at_11.57.17_1788163048747.jpeg';
 import { ErrorBoundary } from '@/components/error-boundary';
 import NotFound from '@/pages/not-found';
-import { bookingSteps, selectEmployee } from '@/lib/booking-flow';
+import { bookingSteps } from '@/lib/booking-flow';
 import { trackEvent } from '@/lib/analytics';
 import { LocaleProvider, useLocale } from '@/lib/locale';
 import {
@@ -773,6 +775,7 @@ type EmployeeFormState = {
   accent: string;
   photoUrl: string;
   schedule: StylistScheduleEntry[];
+  serviceIds: number[];
 };
 type ServiceFormState = {
   name: string;
@@ -1546,7 +1549,8 @@ function ManagerOverview({ onOpenTeam }: { onOpenTeam?: () => void }) {
 
   const todayAppointments = appointments.filter((appointment) => localIsoDate(appointment.date) === today);
   const completedAppointmentsToday = todayAppointments.filter((appointment) => appointment.status.trim().toLowerCase() === 'completed').length;
-  const totalAppointmentsForDate = todayAppointments.length;
+  const totalAppointmentsForDate = todayAppointments.filter(a => a.status !== 'cancelled').length;
+  const cancelledAppointmentsForDate = todayAppointments.filter(a => a.status === 'cancelled').length;
   const nextVisit = upcomingAppointments[0];
   const nextVisitAppointments = nextVisit
     ? upcomingAppointments.filter((appointment) =>
@@ -1602,7 +1606,7 @@ function ManagerOverview({ onOpenTeam }: { onOpenTeam?: () => void }) {
         ) : (
           <>
             <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-workload"><div className="flex items-center justify-between"><Scissors size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">01</span></div><p className="mt-5 font-display text-3xl leading-none">{completedAppointmentsToday}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('completedAppointmentsToday')}</p><p className="mt-2 truncate text-[10px] text-[hsl(var(--muted-foreground))]">{todayLabel}</p></div>
-            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-total-today"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">02</span></div><p className="mt-5 font-display text-3xl leading-none">{totalAppointmentsForDate}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('totalAppointmentsForDate')}</p><p className="mt-2 truncate text-[10px] text-[hsl(var(--muted-foreground))]">{todayLabel}</p></div>
+            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-total-today"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">02</span></div><div className="mt-5 flex items-end justify-between gap-2"><p className="font-display text-3xl leading-none">{totalAppointmentsForDate}</p><span className="rounded-full bg-[hsl(var(--destructive)/.09)] px-2 py-1 text-[9px] font-semibold text-[hsl(var(--destructive))]" data-testid="manager-stat-cancelled-today">{t('cancelledCount').replace('{count}', String(cancelledAppointmentsForDate))}</span></div><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('totalAppointmentsForDate')}</p><p className="mt-2 truncate text-[10px] text-[hsl(var(--muted-foreground))]">{todayLabel}</p></div>
             <div className="manager-stat manager-stat-accent rounded-xl border border-[hsl(var(--secondary))] p-4" data-testid="manager-stat-availability"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--accent))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--card)/.5)]">03</span></div><p className="mt-5 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--card)/.58)]">{t('availableNextTwoHours')}</p><div className="mt-3 border-t border-[hsl(var(--card)/.16)] pt-3" data-testid="manager-available-stylists">{availableStylistsNextTwoHours.length > 0 ? <div className="space-y-1">{availableStylistsNextTwoHours.map((stylist) => <Link key={stylist.id} href={`/book?stylistId=${stylist.id}`} className="flex items-center justify-between gap-2 rounded-md py-1 text-[11px] font-semibold text-[hsl(var(--card)/.82)] transition-colors hover:bg-[hsl(var(--card)/.08)] hover:text-[hsl(var(--accent))]" aria-label={`${t('bookAppointment')}: ${stylist.name}`} data-testid={`link-book-employee-${stylist.id}`}><span className="truncate">{stylist.name}</span><CalendarPlus size={13} className="shrink-0 text-[hsl(var(--accent))]" /></Link>)}</div> : <p className="text-[10px] leading-4 text-[hsl(var(--card)/.55)]">{t('noEmployeesAvailableSoon')}</p>}</div></div>
             <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-next"><div className="flex items-center justify-between"><Clock3 size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">04</span></div><p className="mt-5 font-display text-3xl leading-none">{nextVisit ? nextVisit.time : '--:--'}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('nextVisit')}</p>{nextVisitAppointments.length > 0 && <div className={`mt-2 text-[10px] font-semibold text-[hsl(var(--muted-foreground))] ${nextVisitAppointments.length > 1 ? 'space-y-0.5' : ''}`} data-testid="manager-next-visit-employees">{nextVisitAppointments.map((appointment) => <div key={appointment.id} className="truncate">{appointment.stylistName}</div>)}</div>}</div>
           </>
@@ -1749,62 +1753,96 @@ function DateStrip({ date, currentDate, onChange }: { date: string; currentDate:
   return <div className="flex gap-2 overflow-x-auto pb-2" data-testid="date-strip">{days.map(({ iso, date: day }) => { const selected = iso === date; return <button key={iso} onClick={() => onChange(iso)} className={`min-w-[68px] rounded-xl border px-2 py-3 text-center transition-all ${selected ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[0_8px_18px_hsl(var(--primary)/.18)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.55)]'}`} data-testid={`button-date-${iso}`}><span className="block font-mono-ui text-[9px] uppercase tracking-[.08em] opacity-70">{weekday(day)}</span><span className="mt-1 block text-xl font-semibold">{Number(iso.slice(8, 10))}</span><span className="block text-[9px] uppercase opacity-60">{formatDate(day, { month: 'short' })}</span></button>; })}</div>;
 }
 
+type BookingPerson = {
+  id: string;
+  serviceIds: number[];
+  stylistId?: number;
+  date: string;
+  time: string;
+  notes: string;
+};
+
 function Book() {
-  const { t, formatPrice, formatDate, serviceCopy, stylistCopy } = useLocale();
+  const { t, formatPrice, formatDate, serviceCopy, stylistCopy, translateServiceName, statusLabel } = useLocale();
   const { isSignedIn } = useAuth();
   const { user } = useUser();
+
   const linkedStylistId = bookingLinkStylistId();
-  const [step, setStep] = useState(linkedStylistId ? 2 : 1);
-  const [stylistId, setStylistId] = useState<number | undefined>(linkedStylistId);
-  const [serviceIds, setServiceIds] = useState<number[]>([]);
-  const [date, setDate] = useState(uaeIsoDate());
-  const [time, setTime] = useState('');
-  const [form, setForm] = useState({ customerName: '', email: '', phone: '', notes: '' });
-  const [confirmed, setConfirmed] = useState<Appointment>();
+  const [step, setStep] = useState(1);
+  const [persons, setPersons] = useState<BookingPerson[]>(() => [
+    { id: crypto.randomUUID(), serviceIds: [], stylistId: linkedStylistId, date: uaeIsoDate(), time: '', notes: '' }
+  ]);
+  const [activePersonId, setActivePersonId] = useState(persons[0].id);
+  const [form, setForm] = useState({ customerName: '', email: '', phone: '' });
+  const [confirmedGroup, setConfirmedGroup] = useState<GroupBooking>();
+
   const nowTick = useUaeClockTick();
   const currentUaeDate = uaeIsoDate(new Date(nowTick));
+
   const servicesQuery = useListServices({ query: { queryKey: getListServicesQueryKey() } });
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
-  const availabilityParams = useMemo(() => ({ date, stylistId: stylistId ?? 0, serviceIds }), [date, stylistId, serviceIds]);
-  const availabilityQuery = useGetAvailability(availabilityParams, { query: { enabled: Boolean(date && stylistId && serviceIds.length > 0), queryKey: getGetAvailabilityQueryKey(availabilityParams), refetchOnWindowFocus: true } });
-  const createAppointment = useCreateAppointment();
+
   const services = servicesQuery.data ?? [];
   const stylists = stylistsQuery.data ?? [];
-  const selectedServices = services.filter((service) => serviceIds.includes(service.id));
-  const selectedStylist = stylists.find((stylist) => stylist.id === stylistId);
-  const displayedServices = selectedServices.map(serviceCopy);
-  const displayedStylist = selectedStylist ? stylistCopy(selectedStylist) : undefined;
-  const slots = useMemo(
-    () => (availabilityQuery.data?.[0]?.slots ?? [])
-      .filter((slot) => isFutureUaeSlot(date, slot, new Date(nowTick))),
-    [availabilityQuery.data, date, nowTick],
-  );
-  const totalDurationMinutes = selectedServices.reduce((total, service) => total + service.durationMinutes, 0);
-  const totalPrice = selectedServices.reduce((total, service) => total + Number(service.price), 0);
+
+  const activePerson = persons.find((p) => p.id === activePersonId)!;
+
+  const availabilityParams = useMemo(() => ({
+    date: activePerson.date,
+    stylistId: activePerson.stylistId ?? 0,
+    serviceIds: activePerson.serviceIds,
+  }), [activePerson.date, activePerson.stylistId, activePerson.serviceIds]);
+
+  const availabilityQuery = useGetAvailability(availabilityParams, {
+    query: {
+      enabled: Boolean(activePerson.date && activePerson.stylistId && activePerson.serviceIds.length > 0),
+      queryKey: getGetAvailabilityQueryKey(availabilityParams),
+      refetchOnWindowFocus: true,
+    }
+  });
+
+  const createAppointmentGroup = useCreateAppointmentGroup();
+
+  const slots = useMemo(() => {
+    const apiSlots = availabilityQuery.data?.[0]?.slots ?? [];
+    const taken = persons
+      .filter((p) => p.id !== activePersonId && p.stylistId === activePerson.stylistId && p.date === activePerson.date && p.time)
+      .map((p) => p.time);
+    return apiSlots
+      .filter((slot) => !taken.includes(slot))
+      .filter((slot) => isFutureUaeSlot(activePerson.date, slot, new Date(nowTick)));
+  }, [availabilityQuery.data, activePerson.date, nowTick, persons, activePersonId, activePerson.stylistId]);
 
   useEffect(() => {
     if (linkedStylistId && stylistsQuery.isSuccess && !stylists.some((stylist) => stylist.id === linkedStylistId)) {
-      setStylistId(undefined);
-      setStep(1);
+      setPersons((current) => current.map((p) => ({ ...p, stylistId: undefined })));
     }
   }, [linkedStylistId, stylists, stylistsQuery.isSuccess]);
 
   useEffect(() => {
     const now = new Date(nowTick);
-    const nextDate = rolloverDate(date, now);
-    if (nextDate !== date) {
-      setDate(nextDate);
-      setTime('');
-    } else if (time && !isFutureUaeSlot(date, time, now)) {
-      setTime('');
-    }
-  }, [date, nowTick, time]);
+    setPersons((current) => {
+      let changed = false;
+      const next = current.map((p) => {
+        const nextDate = rolloverDate(p.date, now);
+        if (nextDate !== p.date) {
+          changed = true;
+          return { ...p, date: nextDate, time: '' };
+        } else if (p.time && !isFutureUaeSlot(p.date, p.time, now)) {
+          changed = true;
+          return { ...p, time: '' };
+        }
+        return p;
+      });
+      return changed ? next : current;
+    });
+  }, [nowTick]);
 
   useEffect(() => {
-    if (availabilityQuery.isSuccess && time && !slots.includes(time)) {
-      setTime('');
+    if (availabilityQuery.isSuccess && activePerson.time && !slots.includes(activePerson.time)) {
+      updateActivePerson({ time: '' });
     }
-  }, [availabilityQuery.isSuccess, slots, time]);
+  }, [availabilityQuery.isSuccess, slots, activePerson.time]);
 
   useEffect(() => {
     if (!user) return;
@@ -1817,28 +1855,279 @@ function Book() {
     }));
   }, [user?.id]);
 
-  const canNext = (step === 1 && Boolean(stylistId)) || (step === 2 && serviceIds.length > 0) || (step === 3 && Boolean(time)) || step === 4;
-  const updateField = (field: string, value: string) => setForm((current) => ({ ...current, [field]: value }));
+  const updateActivePerson = (changes: Partial<typeof activePerson>) => {
+    setPersons((current) => current.map((p) => p.id === activePersonId ? { ...p, ...changes } : p));
+  };
+
+  const canNext = () => {
+    if (step === 1) return persons.every(p => p.serviceIds.length > 0);
+    if (step === 2) return persons.every(p => p.stylistId);
+    if (step === 3) return persons.every(p => p.time);
+    return step === 4;
+  };
+
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (serviceIds.length === 0 || !stylistId || !time) return;
-    createAppointment.mutate({ data: { serviceIds, stylistId, date, time, customerName: form.customerName, email: form.email, phone: form.phone, notes: form.notes || null } }, { onSuccess: (appointment) => setConfirmed(appointment) });
+    if (!canNext()) return;
+    createAppointmentGroup.mutate({
+      data: {
+        customerName: form.customerName,
+        email: form.email,
+        phone: form.phone,
+        items: persons.map(p => ({
+          serviceIds: p.serviceIds,
+          stylistId: p.stylistId!,
+          date: p.date,
+          time: p.time,
+          notes: p.notes || null,
+        })),
+      }
+    }, {
+      onSuccess: (group) => setConfirmedGroup(group)
+    });
   };
-  if (confirmed) return <Confirmation appointment={confirmed} />;
+
+  const eligibleStylists = stylists.filter(s => {
+    if (!s.serviceIds || s.serviceIds.length === 0) return true;
+    return activePerson.serviceIds.every(sid => s.serviceIds.includes(sid));
+  });
+
+  const PersonSelector = () => (
+    <div className="mb-6 flex items-center justify-between">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+        {persons.map((person, index) => (
+          <button
+            type="button"
+            key={person.id}
+            onClick={() => setActivePersonId(person.id)}
+            className={`shrink-0 rounded-full px-4 py-2 text-[11px] font-bold tracking-[.05em] transition-colors ${person.id === activePersonId ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))]'}`}
+            data-testid={`button-select-person-${index}`}
+          >
+            {t('personNumber').replace('{number}', String(index + 1))}
+          </button>
+        ))}
+        {persons.length < 5 && (
+          <button
+            type="button"
+            onClick={() => {
+              const newPerson: BookingPerson = { id: crypto.randomUUID(), serviceIds: [], date: uaeIsoDate(), time: '', notes: '' };
+              setPersons([...persons, newPerson]);
+              setActivePersonId(newPerson.id);
+            }}
+            className="shrink-0 rounded-full border border-dashed border-[hsl(var(--border))] px-4 py-2 text-[11px] font-bold tracking-[.05em] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--foreground))]"
+            data-testid="button-add-person"
+          >
+            + {t('addPerson')}
+          </button>
+        )}
+      </div>
+      {persons.length > 1 && (
+        <button
+          type="button"
+          onClick={() => {
+            const next = persons.filter(p => p.id !== activePersonId);
+            setPersons(next);
+            setActivePersonId(next[0].id);
+          }}
+          className="ml-4 shrink-0 flex items-center gap-1 text-[10px] uppercase font-bold text-[hsl(var(--destructive))] transition-opacity hover:opacity-70"
+          data-testid="button-remove-person"
+        >
+          <X size={14} /> <span className="hidden sm:inline">{t('removePerson')}</span>
+        </button>
+      )}
+    </div>
+  );
+
+  if (confirmedGroup) {
+    const firstAppointment = confirmedGroup.appointments[0];
+    return (
+      <main className="mx-auto flex min-h-[calc(100dvh-76px)] max-w-[760px] items-center px-5 py-16 sm:px-8">
+        <div className="w-full rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 text-center shadow-[0_24px_70px_hsl(var(--secondary)/.08)] sm:p-14">
+          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-[hsl(var(--accent))] text-[hsl(var(--secondary))]"><Check size={28} /></span>
+          <p className="mt-8 font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('inTheBooks')}</p>
+          <h1 className="mt-4 font-display text-6xl leading-[.85] sm:text-8xl">{t('seeYouSoon')}</h1>
+          <p className="mx-auto mt-7 max-w-md text-base leading-7 text-[hsl(var(--muted-foreground))]">{t('confirmationInbox')} {firstAppointment.email}. {t('confirmationSent')}</p>
+          <div className="mx-auto mt-10 max-w-md rounded-2xl bg-[hsl(var(--muted)/.75)] p-5 text-left">
+            {confirmedGroup.appointments.map((appointment: any, idx: number) => (
+              <div key={appointment.id} className={`${idx > 0 ? 'mt-6 border-t border-[hsl(var(--border))] pt-6' : ''}`}>
+                <div className="flex justify-between gap-4 border-b border-[hsl(var(--border))] pb-4">
+                  <div className="space-y-1">
+                    {confirmedGroup.appointments.length > 1 && <p className="font-mono-ui text-[9px] uppercase tracking-[.1em] text-[hsl(var(--primary))]">{t('personNumber').replace('{number}', String(idx + 1))}</p>}
+                    {appointment.serviceNames.map((name: string) => <p key={name} className="font-display text-2xl">{translateServiceName(name)}</p>)}
+                  </div>
+                  <span className="font-mono-ui text-[10px] text-[hsl(var(--primary))] self-start mt-1">{statusLabel(appointment.status)}</span>
+                </div>
+                <div className="grid gap-4 pt-4 text-sm sm:grid-cols-2">
+                  <span className="flex items-center gap-2"><CalendarDays size={15} className="text-[hsl(var(--primary))]" />{formatDate(appointment.date, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                  <span className="flex items-center gap-2"><Clock3 size={15} className="text-[hsl(var(--primary))]" />{appointment.time}</span>
+                  <span className="flex items-center gap-2"><UserRound size={15} className="text-[hsl(var(--primary))]" />{appointment.stylistName}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Link href="/appointments" className="mt-8 inline-flex items-center gap-2 text-xs font-bold tracking-[.1em] text-[hsl(var(--primary))]" data-testid="link-view-appointments">{t('viewAppointments')} <ArrowRight size={15} /></Link>
+        </div>
+      </main>
+    );
+  }
+
+  const step1IsLoading = servicesQuery.isLoading;
+  const step1IsError = servicesQuery.isError;
+  const step2IsLoading = stylistsQuery.isLoading;
+  const step2IsError = stylistsQuery.isError;
 
   return (
     <main className="mx-auto max-w-[1240px] px-5 py-12 sm:px-8 md:py-20">
-       <div className="mb-12 max-w-2xl reveal"><p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('reserveYourChair')}</p><h1 className="mt-4 font-display text-6xl leading-[.84] sm:text-8xl">{t('goodHourStarts')}</h1><p className="mt-7 text-base leading-7 text-[hsl(var(--muted-foreground))]">{t('bookingIntro')}</p></div>
+      <div className="mb-12 max-w-2xl reveal"><p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('reserveYourChair')}</p><h1 className="mt-4 font-display text-6xl leading-[.84] sm:text-8xl">{t('goodHourStarts')}</h1><p className="mt-7 text-base leading-7 text-[hsl(var(--muted-foreground))]">{t('bookingIntro')}</p></div>
       <div className="grid gap-10 lg:grid-cols-[1fr_340px]">
-        <div>
-           <div className="mb-10 flex items-center gap-0">{bookingSteps.map((_, index) => <div key={index} className="flex flex-1 items-center"><div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs font-bold transition-colors ${step > index + 1 ? 'border-[hsl(var(--secondary))] bg-[hsl(var(--secondary))] text-[hsl(var(--card))]' : step === index + 1 ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))]'}`}>{step > index + 1 ? <Check size={14} /> : index + 1}</div><span className={`ml-2 hidden text-[10px] font-semibold uppercase tracking-[.1em] sm:block ${step === index + 1 ? 'text-[hsl(var(--foreground))]' : 'text-[hsl(var(--muted-foreground))]'}`}>{[t('employee'), t('service'), t('dateTime'), t('details')][index]}</span>{index < bookingSteps.length - 1 && <span className="mx-2 h-px flex-1 bg-[hsl(var(--border))] sm:mx-4" />}</div>)}</div>
-           {step === 1 && <StepPanel eyebrow={`01 / ${t('choosePerson')}`} title={t('whoSee')}>{stylistsQuery.isLoading ? <LoadingCards count={2} /> : stylistsQuery.isError ? <ErrorMessage retry={() => stylistsQuery.refetch()} /> : stylists.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('teamOnWay')}</div> : <div className="grid gap-3 sm:grid-cols-2">{stylists.map((rawStylist) => { const stylist = stylistCopy(rawStylist); return <button key={stylist.id} onClick={() => { const next = selectEmployee(stylist.id); setStylistId(next.stylistId); setServiceIds(next.serviceIds); setTime(next.time); setStep(next.step); }} className={`rounded-2xl border p-5 text-left transition-all hover:-translate-y-0.5 ${stylistId === stylist.id ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary)/.08)] ring-2 ring-[hsl(var(--primary)/.15)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.45)]'}`} data-testid={`button-stylist-${stylist.id}`}><div className="flex items-center gap-4"><StylistAvatar stylist={stylist} className="h-12 w-12 shrink-0" /><div><h3 className="font-display text-2xl">{stylist.name}</h3><p className="font-mono-ui text-[9px] uppercase tracking-[.11em] text-[hsl(var(--primary))]">{stylist.role}</p></div></div><p className="mt-5 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p></button>; })}</div>}</StepPanel>}
-           {step === 2 && <StepPanel eyebrow={`02 / ${t('chooseService')}`} title={t('whatDoing')}><div className="mb-6 rounded-2xl border border-[hsl(var(--primary)/.3)] bg-[hsl(var(--primary)/.05)] p-4" data-testid="selected-services"><p className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-[hsl(var(--primary))]">{t('selectedServices')}</p>{selectedServices.length === 0 ? <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{t('ritualBegins')}</p> : <div className="mt-3 space-y-2">{displayedServices.map((service) => <div key={service.id} className="flex items-center justify-between gap-3 rounded-xl bg-[hsl(var(--card))] px-3 py-2.5 text-sm"><span>{service.name} <span className="text-[hsl(var(--muted-foreground))]">· {service.durationMinutes} {t('minutes')} · {formatPrice(service.price)}</span></span><button type="button" onClick={() => { setServiceIds((current) => current.filter((id) => id !== service.id)); setTime(''); }} className="inline-flex items-center gap-1 text-xs font-bold text-[hsl(var(--destructive))]" aria-label={`${t('removeService')}: ${service.name}`} data-testid={`button-remove-service-${service.id}`}><X size={14} /> {t('removeService')}</button></div>)}</div>}</div><div className="grid gap-3 sm:grid-cols-2">{servicesQuery.isLoading ? <LoadingCards count={2} /> : servicesQuery.isError ? <ErrorMessage retry={() => servicesQuery.refetch()} /> : services.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('menuRefreshing')}</div> : services.map((rawService) => { const service = serviceCopy(rawService); const selected = serviceIds.includes(service.id); return <button key={service.id} type="button" aria-pressed={selected} onClick={() => { setServiceIds((current) => selected ? current.filter((id) => id !== service.id) : [...current, service.id]); setTime(''); }} className={`group rounded-2xl border p-5 text-left transition-all hover:-translate-y-0.5 ${selected ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary)/.08)] ring-2 ring-[hsl(var(--primary)/.15)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.45)]'}`} data-testid={`button-service-${service.id}`}><div className="flex items-start justify-between"><span className="grid h-9 w-9 place-items-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--primary))]"><Scissors size={16} /></span>{service.featured && <span className="font-mono-ui text-[9px] uppercase tracking-[.12em] text-[hsl(var(--primary))]">{t('mostLoved')}</span>}</div><h3 className="mt-8 font-display text-3xl">{service.name}</h3><p className="mt-2 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{service.description}</p><div className="mt-5 flex gap-4 font-mono-ui text-[10px] uppercase tracking-[.09em] text-[hsl(var(--muted-foreground))]"><span>{service.durationMinutes} {t('minutes')}</span><span>{formatPrice(service.price)}</span></div></button>; })}</div><BackButton onClick={() => setStep(1)} /></StepPanel>}
-           {step === 3 && <StepPanel eyebrow={`03 / ${t('findTime')}`} title={`${t('whenFeelsRight')} ${displayedStylist?.name ?? t('employee')}?`}><p className="mb-5 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('timeIntro')}</p><DateStrip date={date} currentDate={currentUaeDate} onChange={(value) => { setDate(value); setTime(''); }} /><div className="mt-8">{availabilityQuery.isLoading ? <div className="grid grid-cols-3 gap-2 sm:grid-cols-4"><div className="skeleton h-12 rounded-xl" /><div className="skeleton h-12 rounded-xl" /><div className="skeleton h-12 rounded-xl" /></div> : availabilityQuery.isError ? <ErrorMessage retry={() => availabilityQuery.refetch()} /> : slots.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]" data-testid="empty-time-slots">{t('noOpenTimes')} {displayedStylist?.name ?? t('employee')} {t('chooseAnotherDate')}</div> : <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">{slots.map((slot) => <button key={slot} onClick={() => setTime(slot)} className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-all ${time === slot ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary))]'}`} data-testid={`button-time-${slot.replaceAll(':', '-')}`}>{slot}</button>)}</div>}</div><BackButton onClick={() => setStep(2)} /></StepPanel>}
-           {step === 4 && <StepPanel eyebrow={`04 / ${t('yourDetails')}`} title={t('sendNote')}><form onSubmit={submit} className="space-y-4"><Field icon={<UserRound size={16} />} label={t('fullName')} value={form.customerName} onChange={(value) => updateField('customerName', value)} required minLength={2} testId="input-customer-name" /><Field icon={<Mail size={16} />} label={t('emailAddress')} type="email" value={form.email} onChange={(value) => updateField('email', value)} required testId="input-customer-email" /><Field icon={<Phone size={16} />} label={t('phoneNumber')} type="tel" value={form.phone} onChange={(value) => updateField('phone', value)} required minLength={7} testId="input-customer-phone" /><label className="block text-xs font-semibold">{t('anythingKnow')} <textarea value={form.notes} onChange={(event) => updateField('notes', event.target.value)} placeholder={t('notesPlaceholder')} className="mt-2 min-h-[92px] w-full resize-y rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] p-4 text-sm font-normal placeholder:text-[hsl(var(--muted-foreground))]" data-testid="input-notes" /></label><div className="flex items-center justify-between gap-4 pt-4"><BackButton onClick={() => setStep(3)} /><button disabled={createAppointment.isPending} className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--primary))] px-6 py-4 text-xs font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" type="submit" data-testid="button-confirm-appointment">{createAppointment.isPending ? t('holdingChair') : t('confirmAppointment')} <ArrowRight size={15} /></button></div>{createAppointment.isError && <p className="text-sm text-[hsl(var(--destructive))]" data-testid="status-booking-error">{apiErrorMessage(createAppointment.error, t('bookingTaken'))}</p>}</form></StepPanel>}
-           {step < 4 && <div className="mt-7 flex justify-end">{step !== 1 && <button onClick={() => setStep(step + 1)} disabled={!canNext} className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--primary))] px-6 py-4 text-xs font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:cursor-not-allowed disabled:opacity-40" data-testid={`button-next-step-${step}`}>{t('continue')} <ArrowRight size={15} /></button>}</div>}
+        <div className="min-w-0">
+           <div className="mb-10 flex items-center gap-0 overflow-hidden">{bookingSteps.map((_, index) => <div key={index} className="flex flex-1 items-center"><div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs font-bold transition-colors ${step > index + 1 ? 'border-[hsl(var(--secondary))] bg-[hsl(var(--secondary))] text-[hsl(var(--card))]' : step === index + 1 ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))]'}`}>{step > index + 1 ? <Check size={14} /> : index + 1}</div><span className={`ml-2 hidden text-[10px] font-semibold uppercase tracking-[.1em] sm:block ${step === index + 1 ? 'text-[hsl(var(--foreground))]' : 'text-[hsl(var(--muted-foreground))]'}`}>{[t('service'), t('employee'), t('dateTime'), t('details')][index]}</span>{index < bookingSteps.length - 1 && <span className="mx-2 h-px flex-1 bg-[hsl(var(--border))] sm:mx-4" />}</div>)}</div>
+
+           {step === 1 && (
+             <StepPanel eyebrow={`01 / ${t('chooseService')}`} title={t('whatDoing')}>
+               <PersonSelector />
+               <div className="mb-6 rounded-2xl border border-[hsl(var(--primary)/.3)] bg-[hsl(var(--primary)/.05)] p-4" data-testid="selected-services">
+                 <p className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-[hsl(var(--primary))]">{t('selectedServices')}</p>
+                 {activePerson.serviceIds.length === 0 ? <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{t('ritualBegins')}</p> : <div className="mt-3 space-y-2">
+                   {activePerson.serviceIds.map(sid => {
+                     const service = services.find(s => s.id === sid);
+                     if (!service) return null;
+                     return (
+                       <div key={sid} className="flex items-center justify-between gap-3 rounded-xl bg-[hsl(var(--card))] px-3 py-2.5 text-sm">
+                         <span className="truncate">{service.name} <span className="text-[hsl(var(--muted-foreground))] whitespace-nowrap">· {service.durationMinutes} {t('minutes')} · {formatPrice(service.price)}</span></span>
+                         <button type="button" onClick={() => {
+                           const newServiceIds = activePerson.serviceIds.filter(id => id !== sid);
+                           let newStylistId = activePerson.stylistId;
+                           const currentStylist = stylists.find(s => s.id === newStylistId);
+                           if (currentStylist && currentStylist.serviceIds && currentStylist.serviceIds.length > 0) {
+                             if (!newServiceIds.every(id => currentStylist.serviceIds.includes(id))) newStylistId = undefined;
+                           }
+                           updateActivePerson({ serviceIds: newServiceIds, stylistId: newStylistId, time: '' });
+                         }} className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-[hsl(var(--destructive))]" aria-label={`${t('removeService')}: ${service.name}`} data-testid={`button-remove-service-${service.id}`}><X size={14} /> <span className="hidden sm:inline">{t('removeService')}</span></button>
+                       </div>
+                     );
+                   })}
+                 </div>}
+               </div>
+               <div className="grid gap-3 sm:grid-cols-2">
+                 {step1IsLoading ? <LoadingCards count={2} /> : step1IsError ? <ErrorMessage retry={() => servicesQuery.refetch()} /> : services.length === 0 ? <div className="col-span-full rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('menuRefreshing')}</div> : services.map((rawService) => {
+                   const service = serviceCopy(rawService);
+                   const selected = activePerson.serviceIds.includes(service.id);
+                   return (
+                     <button key={service.id} type="button" aria-pressed={selected} onClick={() => {
+                       const newServiceIds = selected ? activePerson.serviceIds.filter(id => id !== service.id) : [...activePerson.serviceIds, service.id];
+                       let newStylistId = activePerson.stylistId;
+                       const currentStylist = stylists.find(s => s.id === newStylistId);
+                       if (currentStylist && currentStylist.serviceIds && currentStylist.serviceIds.length > 0) {
+                         if (!newServiceIds.every(id => currentStylist.serviceIds.includes(id))) newStylistId = undefined;
+                       }
+                       updateActivePerson({ serviceIds: newServiceIds, stylistId: newStylistId, time: '' });
+                     }} className={`group rounded-2xl border p-5 text-left transition-all hover:-translate-y-0.5 ${selected ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary)/.08)] ring-2 ring-[hsl(var(--primary)/.15)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.45)]'}`} data-testid={`button-service-${service.id}`}>
+                       <div className="flex items-start justify-between"><span className="grid h-9 w-9 place-items-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--primary))]"><Scissors size={16} /></span>{service.featured && <span className="font-mono-ui text-[9px] uppercase tracking-[.12em] text-[hsl(var(--primary))]">{t('mostLoved')}</span>}</div>
+                       <h3 className="mt-8 font-display text-3xl">{service.name}</h3>
+                       <p className="mt-2 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{service.description}</p>
+                       <div className="mt-5 flex gap-4 font-mono-ui text-[10px] uppercase tracking-[.09em] text-[hsl(var(--muted-foreground))]"><span>{service.durationMinutes} {t('minutes')}</span><span>{formatPrice(service.price)}</span></div>
+                     </button>
+                   );
+                 })}
+               </div>
+             </StepPanel>
+           )}
+
+           {step === 2 && (
+             <StepPanel eyebrow={`02 / ${t('choosePerson')}`} title={t('whoSee')}>
+               <PersonSelector />
+               {step2IsLoading ? <LoadingCards count={2} /> : step2IsError ? <ErrorMessage retry={() => stylistsQuery.refetch()} /> : stylists.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('teamOnWay')}</div> : <div className="grid gap-3 sm:grid-cols-2">
+                {eligibleStylists.map((rawStylist) => {
+                   const stylist = stylistCopy(rawStylist);
+                   return (
+                    <button type="button" key={stylist.id} onClick={() => {
+                      updateActivePerson({ stylistId: stylist.id, time: '' });
+                     }} className={`rounded-2xl border p-5 text-left transition-all hover:-translate-y-0.5 ${activePerson.stylistId === stylist.id ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary)/.08)] ring-2 ring-[hsl(var(--primary)/.15)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.45)]'}`} data-testid={`button-stylist-${stylist.id}`}>
+                       <div className="flex items-center gap-4"><StylistAvatar stylist={stylist} className="h-12 w-12 shrink-0" /><div><h3 className="font-display text-2xl">{stylist.name}</h3><p className="font-mono-ui text-[9px] uppercase tracking-[.11em] text-[hsl(var(--primary))]">{stylist.role}</p></div></div>
+                       <p className="mt-5 text-sm leading-5 text-[hsl(var(--muted-foreground))]">{stylist.bio}</p>
+                     </button>
+                   );
+                 })}
+                 {eligibleStylists.length === 0 && <div className="col-span-full rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noEmployeesAvailableSoon')}</div>}
+               </div>}
+               <BackButton onClick={() => setStep(1)} />
+             </StepPanel>
+           )}
+
+           {step === 3 && (
+             <StepPanel eyebrow={`03 / ${t('findTime')}`} title={`${t('whenFeelsRight')} ${stylists.find(s => s.id === activePerson.stylistId)?.name ?? t('employee')}?`}>
+               <PersonSelector />
+               <p className="mb-5 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('timeIntro')}</p>
+               <DateStrip date={activePerson.date} currentDate={currentUaeDate} onChange={(value) => updateActivePerson({ date: value, time: '' })} />
+               <div className="mt-8">
+                 {availabilityQuery.isLoading ? <div className="grid grid-cols-3 gap-2 sm:grid-cols-4"><div className="skeleton h-12 rounded-xl" /><div className="skeleton h-12 rounded-xl" /><div className="skeleton h-12 rounded-xl" /></div> : availabilityQuery.isError ? <ErrorMessage retry={() => availabilityQuery.refetch()} /> : slots.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]" data-testid="empty-time-slots">{t('noOpenTimes')} {stylists.find(s => s.id === activePerson.stylistId)?.name ?? t('employee')} {t('chooseAnotherDate')}</div> : <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {slots.map((slot) => <button type="button" key={slot} onClick={() => updateActivePerson({ time: slot })} className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-all ${activePerson.time === slot ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary))]'}`} data-testid={`button-time-${slot.replaceAll(':', '-')}`}>{slot}</button>)}
+                 </div>}
+               </div>
+              <label className="mt-6 block text-xs font-semibold">
+                {t('anythingKnow')}
+                <textarea
+                  value={activePerson.notes}
+                  onChange={(event) => updateActivePerson({ notes: event.target.value })}
+                  placeholder={t('notesPlaceholder')}
+                  className="mt-2 min-h-[84px] w-full resize-y rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] p-4 text-sm font-normal placeholder:text-[hsl(var(--muted-foreground))]"
+                  data-testid={`input-person-notes-${persons.findIndex((person) => person.id === activePersonId)}`}
+                />
+              </label>
+               <BackButton onClick={() => setStep(2)} />
+             </StepPanel>
+           )}
+
+           {step === 4 && (
+             <StepPanel eyebrow={`04 / ${t('yourDetails')}`} title={t('sendNote')}>
+               <form onSubmit={submit} className="space-y-4">
+                 <Field icon={<UserRound size={16} />} label={t('fullName')} value={form.customerName} onChange={(value) => setForm(c => ({...c, customerName: value}))} required minLength={2} testId="input-customer-name" />
+                 <Field icon={<Mail size={16} />} label={t('emailAddress')} type="email" value={form.email} onChange={(value) => setForm(c => ({...c, email: value}))} required testId="input-customer-email" />
+                 <Field icon={<Phone size={16} />} label={t('phoneNumber')} type="tel" value={form.phone} onChange={(value) => setForm(c => ({...c, phone: value}))} required minLength={7} testId="input-customer-phone" />
+                 <div className="flex items-center justify-between gap-4 pt-4">
+                   <BackButton onClick={() => setStep(3)} />
+                   <button disabled={createAppointmentGroup.isPending} className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--primary))] px-6 py-4 text-xs font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" type="submit" data-testid="button-confirm-appointment">
+                     {createAppointmentGroup.isPending ? t('holdingChair') : t('confirmAppointment')} <ArrowRight size={15} />
+                   </button>
+                 </div>
+                 {createAppointmentGroup.isError && <p className="text-sm text-[hsl(var(--destructive))]" data-testid="status-booking-error">{apiErrorMessage(createAppointmentGroup.error, t('bookingTaken'))}</p>}
+               </form>
+             </StepPanel>
+           )}
+
+           {step < 4 && (
+             <div className="mt-7 flex justify-end">
+              <button type="button" onClick={() => setStep(step + 1)} disabled={!canNext()} className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--primary))] px-6 py-4 text-xs font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:cursor-not-allowed disabled:opacity-40" data-testid={`button-next-step-${step}`}>
+                 {t('continue')} <ArrowRight size={15} />
+               </button>
+             </div>
+           )}
         </div>
-          <aside className="h-fit rounded-2xl bg-[hsl(var(--secondary))] p-6 text-[hsl(var(--card))] lg:sticky lg:top-28"><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--accent))]">{t('yourVisit')}</p><div className="mt-8 border-b border-[hsl(var(--card)/.15)] pb-6">{displayedServices.length > 0 ? <div className="space-y-2">{displayedServices.map((service) => <p key={service.id} className="font-display text-2xl">{service.name}</p>)}</div> : <p className="font-display text-3xl">{t('selectService')}</p>}<div className="mt-4 space-y-1 text-sm text-[hsl(var(--card)/.58)]">{displayedServices.length > 0 ? <><p>{t('totalDuration')}: {totalDurationMinutes} {t('minutes')}</p><p>{t('totalPrice')}: {formatPrice(totalPrice)}</p></> : <p>{t('ritualBegins')}</p>}</div></div><div className="space-y-5 py-6 text-sm"><div className="flex gap-3"><UserRound size={16} className="mt-0.5 text-[hsl(var(--accent))]" /><span>{displayedStylist?.name ?? t('stylistToChoose')}</span></div><div className="flex gap-3"><CalendarDays size={16} className="mt-0.5 text-[hsl(var(--accent))]" /><span>{date ? formatDate(date, { weekday: 'long', month: 'long', day: 'numeric' }) : t('dateToChoose')}{time ? ` · ${time}` : ''}</span></div></div><div className="flex gap-2 border-t border-[hsl(var(--card)/.15)] pt-5 text-[11px] leading-5 text-[hsl(var(--card)/.54)]"><ShieldCheck size={15} className="shrink-0 text-[hsl(var(--accent))]" /> {t('noPayment')}</div></aside>
+
+        <aside className="h-fit rounded-2xl bg-[hsl(var(--secondary))] p-6 text-[hsl(var(--card))] lg:sticky lg:top-28">
+          <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--accent))]">{t('yourVisit')}</p>
+          <div className="mt-8 border-b border-[hsl(var(--card)/.15)] pb-6 space-y-6">
+            {persons.map((person, idx) => {
+              const selectedServices = services.filter(s => person.serviceIds.includes(s.id));
+              const selectedStylist = stylists.find(s => s.id === person.stylistId);
+              const totalDurationMinutes = selectedServices.reduce((t, s) => t + s.durationMinutes, 0);
+              const totalPrice = selectedServices.reduce((t, s) => t + Number(s.price), 0);
+              return (
+                <div key={person.id} className="relative">
+                  {persons.length > 1 && <p className="mb-2 font-mono-ui text-[9px] uppercase tracking-[.1em] text-[hsl(var(--primary))]">{t('personNumber').replace('{number}', String(idx + 1))}</p>}
+                  {selectedServices.length > 0 ? <div className="space-y-2">{selectedServices.map((service) => <p key={service.id} className="font-display text-2xl">{serviceCopy(service).name}</p>)}</div> : <p className="font-display text-2xl opacity-50">{t('selectService')}</p>}
+                  <div className="mt-4 space-y-2 text-sm text-[hsl(var(--card)/.58)]">
+                    {selectedServices.length > 0 && <><p>{t('totalDuration')}: {totalDurationMinutes} {t('minutes')}</p><p>{t('totalPrice')}: {formatPrice(totalPrice)}</p></>}
+                    <div className="flex gap-3 text-[hsl(var(--card))]"><UserRound size={16} className="mt-0.5 text-[hsl(var(--accent))]" /><span>{selectedStylist?.name ?? t('stylistToChoose')}</span></div>
+                    <div className="flex gap-3 text-[hsl(var(--card))]"><CalendarDays size={16} className="mt-0.5 text-[hsl(var(--accent))]" /><span>{person.date ? formatDate(person.date, { weekday: 'long', month: 'long', day: 'numeric' }) : t('dateToChoose')}{person.time ? ` · ${person.time}` : ''}</span></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-2 pt-5 text-[11px] leading-5 text-[hsl(var(--card)/.54)]"><ShieldCheck size={15} className="shrink-0 text-[hsl(var(--accent))]" /> {t('noPayment')}</div>
+        </aside>
       </div>
     </main>
   );
@@ -1851,7 +2140,7 @@ function StepPanel({ eyebrow, title, children }: { eyebrow: string; title: strin
 }
 function BackButton({ onClick }: { onClick: () => void }) {
   const { t } = useLocale();
-  return <button onClick={onClick} className="mt-8 inline-flex items-center gap-2 text-xs font-bold tracking-[.08em] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]" data-testid="button-back"><ChevronLeft size={15} /> {t('back')}</button>;
+  return <button type="button" onClick={onClick} className="mt-8 inline-flex items-center gap-2 text-xs font-bold tracking-[.08em] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]" data-testid="button-back"><ChevronLeft size={15} /> {t('back')}</button>;
 }
 function Field({ icon, label, value, onChange, type = 'text', required = false, minLength, testId }: { icon: React.ReactNode; label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; minLength?: number; testId: string }) {
   return <label className="block text-xs font-semibold">{label}<span className="relative mt-2 block"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[hsl(var(--primary))]">{icon}</span><input type={type} required={required} minLength={minLength} value={value} onChange={(event) => onChange(event.target.value)} className="h-12 w-full rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] pl-11 pr-4 text-sm font-normal placeholder:text-[hsl(var(--muted-foreground))]" data-testid={testId} /></span></label>;
@@ -2151,6 +2440,7 @@ const emptyEmployeeForm: EmployeeFormState = {
   accent: '#B86B45',
   photoUrl: '',
   schedule: defaultEmployeeSchedule,
+  serviceIds: [],
 };
 
 function employeeToForm(stylist: Stylist): EmployeeFormState {
@@ -2162,6 +2452,7 @@ function employeeToForm(stylist: Stylist): EmployeeFormState {
     accent: stylist.accent,
     photoUrl: stylist.photoUrl ?? '',
     schedule: scheduleWithPresetBreaks(stylist.schedule),
+    serviceIds: stylist.serviceIds,
   };
 }
 
@@ -2180,6 +2471,8 @@ function EmployeeProfileEditor({
   const [photoPreview, setPhotoPreview] = useState<string | undefined>(() => stylistPhotoSource(stylist?.photoUrl));
   const [photoUpload, setPhotoUpload] = useState<{ status: 'idle' | 'uploading' | 'success' | 'error'; progress: number }>({ status: 'idle', progress: 0 });
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const servicesQuery = useListServices({ query: { queryKey: getListServicesQueryKey() } });
+  const services = servicesQuery.data ?? [];
   const previewObjectUrlRef = useRef<string | undefined>(undefined);
   const createStylist = useCreateStylist();
   const updateStylist = useUpdateStylist();
@@ -2271,6 +2564,7 @@ function EmployeeProfileEditor({
       accent: form.accent.trim(),
       photoUrl: form.photoUrl.trim() || null,
       schedule: form.schedule,
+      serviceIds: form.serviceIds,
     };
     if (!data.name || !data.role || !data.accent) {
       setFeedback(t('employeeRequired'));
@@ -2334,6 +2628,29 @@ function EmployeeProfileEditor({
           <p className="mt-2 text-[11px] text-[hsl(var(--muted-foreground))]">{t('photoUploadHint')}</p>
           {photoUpload.status === 'uploading' && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[hsl(var(--muted))]" role="progressbar" aria-label={`${t('uploading')} ${photoUpload.progress}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={photoUpload.progress} data-testid="employee-photo-upload-progress"><div className="h-full bg-[hsl(var(--primary))] transition-all" style={{ width: `${photoUpload.progress}%` }} /></div>}
           {photoUpload.status === 'success' && <p className="mt-2 text-[11px] text-[hsl(var(--secondary))]" role="status" data-testid="status-employee-photo-success">{t('photoUploadComplete')}</p>}
+        </div>
+        <div className="sm:col-span-2 mt-4">
+          <p className="text-xs font-semibold">{t('services')}</p>
+          <p className="mt-1 text-[11px] text-[hsl(var(--muted-foreground))]">{t('managerServicesCheckboxes')}</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {services.map((service) => (
+              <label key={service.id} className="flex items-center gap-3 rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] p-3 text-sm transition-colors hover:border-[hsl(var(--primary))] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.serviceIds.includes(service.id)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    updateField('serviceIds', checked
+                      ? [...form.serviceIds, service.id]
+                      : form.serviceIds.filter((id) => id !== service.id));
+                  }}
+                  className="h-4 w-4 rounded-sm border border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))] focus:ring-offset-2"
+                  data-testid={`checkbox-employee-service-${service.id}`}
+                />
+                <span className="truncate">{service.name}</span>
+              </label>
+            ))}
+          </div>
         </div>
         <label className="text-xs font-semibold sm:col-span-2">{t('description')} <span className="font-normal text-[hsl(var(--muted-foreground))]">({t('optional')})</span>
           <textarea value={form.bio} onChange={(event) => updateField('bio', event.target.value)} rows={3} className="mt-2 w-full resize-y rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 py-3 text-sm font-normal" data-testid="input-employee-bio" />
