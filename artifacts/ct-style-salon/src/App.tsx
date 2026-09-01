@@ -1070,6 +1070,11 @@ function appointmentTimeValue(value: string): string {
   return `${hour12}:${match[2]} ${period}`;
 }
 
+function bookingLinkStylistId(): number | undefined {
+  const value = Number(new URLSearchParams(window.location.search).get('stylistId'));
+  return Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 function appointmentStart(appointment: Pick<Appointment, 'date' | 'time'>): number {
   const [year, month, day] = localIsoDate(appointment.date).split('-').map(Number);
   const inputTime = timeInputValue(appointment.time);
@@ -1549,7 +1554,7 @@ function ManagerOverview({ onOpenTeam }: { onOpenTeam?: () => void }) {
           <>
             <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-workload"><div className="flex items-center justify-between"><Scissors size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">01</span></div><p className="mt-5 font-display text-3xl leading-none">{completedAppointmentsToday}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('completedAppointmentsToday')}</p><p className="mt-2 truncate text-[10px] text-[hsl(var(--muted-foreground))]">{todayLabel}</p></div>
             <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-total-today"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">02</span></div><p className="mt-5 font-display text-3xl leading-none">{totalAppointmentsForDate}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('totalAppointmentsForDate')}</p><p className="mt-2 truncate text-[10px] text-[hsl(var(--muted-foreground))]">{todayLabel}</p></div>
-            <div className="manager-stat manager-stat-accent rounded-xl border border-[hsl(var(--secondary))] p-4" data-testid="manager-stat-availability"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--accent))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--card)/.5)]">03</span></div><p className="mt-5 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--card)/.58)]">{t('availableNextTwoHours')}</p><div className="mt-3 border-t border-[hsl(var(--card)/.16)] pt-3" data-testid="manager-available-stylists">{availableStylistsNextTwoHours.length > 0 ? <div className="space-y-1">{availableStylistsNextTwoHours.map((stylist) => <Link key={stylist.id} href="/book" className="flex items-center justify-between gap-2 rounded-md py-1 text-[11px] font-semibold text-[hsl(var(--card)/.82)] transition-colors hover:bg-[hsl(var(--card)/.08)] hover:text-[hsl(var(--accent))]" aria-label={`${t('bookAppointment')}: ${stylist.name}`} data-testid={`link-book-employee-${stylist.id}`}><span className="truncate">{stylist.name}</span><CalendarPlus size={13} className="shrink-0 text-[hsl(var(--accent))]" /></Link>)}</div> : <p className="text-[10px] leading-4 text-[hsl(var(--card)/.55)]">{t('noEmployeesAvailableSoon')}</p>}</div></div>
+            <div className="manager-stat manager-stat-accent rounded-xl border border-[hsl(var(--secondary))] p-4" data-testid="manager-stat-availability"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--accent))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--card)/.5)]">03</span></div><p className="mt-5 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--card)/.58)]">{t('availableNextTwoHours')}</p><div className="mt-3 border-t border-[hsl(var(--card)/.16)] pt-3" data-testid="manager-available-stylists">{availableStylistsNextTwoHours.length > 0 ? <div className="space-y-1">{availableStylistsNextTwoHours.map((stylist) => <Link key={stylist.id} href={`/book?stylistId=${stylist.id}`} className="flex items-center justify-between gap-2 rounded-md py-1 text-[11px] font-semibold text-[hsl(var(--card)/.82)] transition-colors hover:bg-[hsl(var(--card)/.08)] hover:text-[hsl(var(--accent))]" aria-label={`${t('bookAppointment')}: ${stylist.name}`} data-testid={`link-book-employee-${stylist.id}`}><span className="truncate">{stylist.name}</span><CalendarPlus size={13} className="shrink-0 text-[hsl(var(--accent))]" /></Link>)}</div> : <p className="text-[10px] leading-4 text-[hsl(var(--card)/.55)]">{t('noEmployeesAvailableSoon')}</p>}</div></div>
             <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-next"><div className="flex items-center justify-between"><Clock3 size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">04</span></div><p className="mt-5 font-display text-3xl leading-none">{nextVisit ? nextVisit.time : '--:--'}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('nextVisit')}</p>{nextVisitAppointments.length > 0 && <div className={`mt-2 text-[10px] font-semibold text-[hsl(var(--muted-foreground))] ${nextVisitAppointments.length > 1 ? 'space-y-0.5' : ''}`} data-testid="manager-next-visit-employees">{nextVisitAppointments.map((appointment) => <div key={appointment.id} className="truncate">{appointment.stylistName}</div>)}</div>}</div>
           </>
         )}
@@ -1699,8 +1704,9 @@ function Book() {
   const { t, formatPrice, formatDate, serviceCopy, stylistCopy } = useLocale();
   const { isSignedIn } = useAuth();
   const { user } = useUser();
-  const [step, setStep] = useState(1);
-  const [stylistId, setStylistId] = useState<number>();
+  const linkedStylistId = bookingLinkStylistId();
+  const [step, setStep] = useState(linkedStylistId ? 2 : 1);
+  const [stylistId, setStylistId] = useState<number | undefined>(linkedStylistId);
   const [serviceIds, setServiceIds] = useState<number[]>([]);
   const [date, setDate] = useState(uaeIsoDate());
   const [time, setTime] = useState('');
@@ -1726,6 +1732,13 @@ function Book() {
   );
   const totalDurationMinutes = selectedServices.reduce((total, service) => total + service.durationMinutes, 0);
   const totalPrice = selectedServices.reduce((total, service) => total + Number(service.price), 0);
+
+  useEffect(() => {
+    if (linkedStylistId && stylistsQuery.isSuccess && !stylists.some((stylist) => stylist.id === linkedStylistId)) {
+      setStylistId(undefined);
+      setStep(1);
+    }
+  }, [linkedStylistId, stylists, stylistsQuery.isSuccess]);
 
   useEffect(() => {
     const now = new Date(nowTick);
