@@ -50,6 +50,7 @@ import { ObjectStorageService } from "../lib/objectStorage";
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 const MAX_BOOKING_DAYS_AHEAD = 5;
+const UAE_TIME_ZONE = "Asia/Dubai";
 type BookedAppointment = {
   time: string;
   durationMinutes: number;
@@ -229,6 +230,44 @@ function toDate(value: unknown): Date | undefined {
   }
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+function uaeDateTimeParts(value = new Date()): {
+  date: string;
+  minutes: number;
+} {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: UAE_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(value)
+      .map(({ type, value: partValue }) => [type, partValue]),
+  );
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    minutes: Number(parts.hour) * 60 + Number(parts.minute),
+  };
+}
+
+function isFutureUaeSlot(date: string, time: string): boolean {
+  const requestedMinutes = timeToMinutes(time);
+  if (requestedMinutes === undefined) {
+    return false;
+  }
+  const current = uaeDateTimeParts();
+  if (date > current.date) {
+    return true;
+  }
+  if (date < current.date) {
+    return false;
+  }
+  return requestedMinutes > current.minutes;
 }
 
 function appointmentResponse(
@@ -828,21 +867,22 @@ router.get("/availability", async (req, res): Promise<void> => {
 
   const schedule = stylist.schedule ?? [];
   const weekday = parsed.data.date.getUTCDay();
+  const scheduledSlots = schedule.length > 0
+    ? slotsForSchedule(schedule, weekday, durationMinutes).filter(
+        (slot) =>
+          !bookedAppointments.some((bookedAppointment) =>
+            appointmentTimesOverlap(
+              slot,
+              durationMinutes,
+              bookedAppointment,
+            ),
+          ),
+      )
+    : [];
   const output = [{
     stylistId: stylist.id,
     date: parsed.data.date,
-    slots: schedule.length > 0
-      ? slotsForSchedule(schedule, weekday, durationMinutes).filter(
-          (slot) =>
-            !bookedAppointments.some((bookedAppointment) =>
-              appointmentTimesOverlap(
-                slot,
-                durationMinutes,
-                bookedAppointment,
-              ),
-            ),
-        )
-      : [],
+    slots: scheduledSlots.filter((slot) => isFutureUaeSlot(date, slot)),
   }];
   res.json(GetAvailabilityResponse.parse(output));
 });
@@ -892,6 +932,11 @@ router.post("/appointments", async (req, res): Promise<void> => {
   }
   if (process.env.NODE_ENV !== "test" && !isWithinBookingWindow(body.data.date)) {
     res.status(400).json({ error: "Appointments can only be booked within the next five days." });
+    return;
+  }
+  const date = body.data.date.toISOString().slice(0, 10);
+  if (!isFutureUaeSlot(date, body.data.time)) {
+    res.status(400).json({ error: "That appointment time has already passed in the UAE." });
     return;
   }
 
@@ -952,7 +997,6 @@ router.post("/appointments", async (req, res): Promise<void> => {
       return;
     }
 
-    const date = body.data.date.toISOString().slice(0, 10);
     const existingAppointments = await tx
       .select({
         time: appointmentsTable.time,
@@ -1083,6 +1127,10 @@ router.patch("/appointments/:appointmentId", async (req, res): Promise<void> => 
     }
 
     const date = body.data.date.toISOString().slice(0, 10);
+    if (!isFutureUaeSlot(date, body.data.time)) {
+      res.status(400).json({ error: "That appointment time has already passed in the UAE." });
+      return;
+    }
     const existingAppointments = await tx
       .select({
         id: appointmentsTable.id,

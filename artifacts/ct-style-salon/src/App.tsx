@@ -74,6 +74,66 @@ import { Route, Switch, Link, Router as WouterRouter, useLocation } from 'wouter
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const UAE_TIME_ZONE = 'Asia/Dubai';
+const uaeDateTimeFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: UAE_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+function uaeDateTimeParts(value = new Date()) {
+  const parts = Object.fromEntries(
+    uaeDateTimeFormatter.formatToParts(value).map(({ type, value: partValue }) => [type, partValue]),
+  );
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    minutes: Number(parts.hour) * 60 + Number(parts.minute),
+  };
+}
+
+function uaeIsoDate(value = new Date()) {
+  return uaeDateTimeParts(value).date;
+}
+
+function addIsoDays(value: string, days: number) {
+  const date = new Date(`${value}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function slotTimeToMinutes(value: string) {
+  const match = /^(\d{1,2}):(\d{2}) (AM|PM)$/.exec(value);
+  if (!match) return undefined;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 1 || hour > 12 || minute > 59) return undefined;
+  return (hour % 12) * 60 + minute + (match[3] === 'PM' ? 720 : 0);
+}
+
+function isFutureUaeSlot(date: string, time: string, now = new Date()) {
+  const slotMinutes = slotTimeToMinutes(time);
+  if (slotMinutes === undefined) return false;
+  const current = uaeDateTimeParts(now);
+  if (date > current.date) return true;
+  if (date < current.date) return false;
+  return slotMinutes > current.minutes;
+}
+
+function useUaeClockTick() {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return now;
+}
+
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
@@ -1593,8 +1653,11 @@ function ManagerSchedule() {
 
 function DateStrip({ date, onChange }: { date: string; onChange: (date: string) => void }) {
   const { weekday, formatDate } = useLocale();
-  const days = useMemo(() => Array.from({ length: 6 }, (_, index) => { const value = new Date(); value.setHours(12, 0, 0, 0); value.setDate(value.getDate() + index); return value; }), []);
-  return <div className="flex gap-2 overflow-x-auto pb-2" data-testid="date-strip">{days.map((day) => { const iso = day.toISOString().slice(0, 10); const selected = iso === date; return <button key={iso} onClick={() => onChange(iso)} className={`min-w-[68px] rounded-xl border px-2 py-3 text-center transition-all ${selected ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[0_8px_18px_hsl(var(--primary)/.18)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.55)]'}`} data-testid={`button-date-${iso}`}><span className="block font-mono-ui text-[9px] uppercase tracking-[.08em] opacity-70">{weekday(day)}</span><span className="mt-1 block text-xl font-semibold">{day.getDate()}</span><span className="block text-[9px] uppercase opacity-60">{formatDate(day, { month: 'short' })}</span></button>; })}</div>;
+  const days = useMemo(() => Array.from({ length: 6 }, (_, index) => {
+    const iso = addIsoDays(uaeIsoDate(), index);
+    return { iso, date: new Date(`${iso}T12:00:00.000Z`) };
+  }), []);
+  return <div className="flex gap-2 overflow-x-auto pb-2" data-testid="date-strip">{days.map(({ iso, date: day }) => { const selected = iso === date; return <button key={iso} onClick={() => onChange(iso)} className={`min-w-[68px] rounded-xl border px-2 py-3 text-center transition-all ${selected ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[0_8px_18px_hsl(var(--primary)/.18)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.55)]'}`} data-testid={`button-date-${iso}`}><span className="block font-mono-ui text-[9px] uppercase tracking-[.08em] opacity-70">{weekday(day)}</span><span className="mt-1 block text-xl font-semibold">{Number(iso.slice(8, 10))}</span><span className="block text-[9px] uppercase opacity-60">{formatDate(day, { month: 'short' })}</span></button>; })}</div>;
 }
 
 function Book() {
@@ -1604,10 +1667,11 @@ function Book() {
   const [step, setStep] = useState(1);
   const [stylistId, setStylistId] = useState<number>();
   const [serviceIds, setServiceIds] = useState<number[]>([]);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(uaeIsoDate());
   const [time, setTime] = useState('');
   const [form, setForm] = useState({ customerName: '', email: '', phone: '', notes: '' });
   const [confirmed, setConfirmed] = useState<Appointment>();
+  const nowTick = useUaeClockTick();
   const servicesQuery = useListServices({ query: { queryKey: getListServicesQueryKey() } });
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
   const availabilityParams = useMemo(() => ({ date, stylistId: stylistId ?? 0, serviceIds }), [date, stylistId, serviceIds]);
@@ -1619,7 +1683,11 @@ function Book() {
   const selectedStylist = stylists.find((stylist) => stylist.id === stylistId);
   const displayedServices = selectedServices.map(serviceCopy);
   const displayedStylist = selectedStylist ? stylistCopy(selectedStylist) : undefined;
-  const slots = availabilityQuery.data?.[0]?.slots ?? [];
+  const slots = useMemo(
+    () => (availabilityQuery.data?.[0]?.slots ?? [])
+      .filter((slot) => isFutureUaeSlot(date, slot, new Date(nowTick))),
+    [availabilityQuery.data, date, nowTick],
+  );
   const totalDurationMinutes = selectedServices.reduce((total, service) => total + service.durationMinutes, 0);
   const totalPrice = selectedServices.reduce((total, service) => total + Number(service.price), 0);
 
@@ -1681,10 +1749,7 @@ function Confirmation({ appointment }: { appointment: Appointment }) {
 
 function localIsoDate(date: Date | string) {
   if (typeof date === 'string') return date.slice(0, 10);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return uaeIsoDate(date);
 }
 
 function AccountAppointments() {

@@ -359,12 +359,12 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
       formatPrice: (value) => new Intl.NumberFormat(intlLocale, {
         style: 'currency', currency: 'AED', minimumFractionDigits: 2, maximumFractionDigits: 2,
       }).format(Number(value)),
-      formatDate: (value, options) => new Intl.DateTimeFormat(intlLocale, options).format(
+      formatDate: (value, options) => new Intl.DateTimeFormat(intlLocale, { ...options, timeZone: 'Asia/Dubai' }).format(
         typeof value === 'string'
-          ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value)
+          ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00.000Z` : value)
           : value,
       ),
-      weekday: (day, short = true) => day.toLocaleDateString(intlLocale, { weekday: short ? 'short' : 'long' }),
+      weekday: (day, short = true) => day.toLocaleDateString(intlLocale, { weekday: short ? 'short' : 'long', timeZone: 'Asia/Dubai' }),
       serviceCopy: (service) => {
         if (locale === 'en') return service;
         const translated = serviceTranslations[service.name];
