@@ -832,9 +832,9 @@ function ServiceManagement() {
   };
 
   return (
-    <section className="mt-8 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-4 sm:p-5" data-testid="service-management">
+    <section id="service-management" className="manager-section mt-0 rounded-2xl border p-4 sm:p-5" data-testid="service-management">
       <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-4 sm:flex-row sm:items-end">
-         <div><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('serviceMenu')}</p><h2 className="mt-1 font-display text-3xl">{t('rituals')}</h2><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')}</p></div>
+         <div className="manager-section-header ps-3"><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('serviceMenu')}</p><h2 className="mt-1 font-display text-3xl">{t('rituals')}</h2><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')}</p></div>
          <button type="button" onClick={() => { setEditing('new'); setFeedback(undefined); setConfirmingDelete(null); }} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-4 py-2.5 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--card))] hover:bg-[hsl(var(--secondary)/.88)]" data-testid="button-add-service"><Plus size={15} /> {t('addService')}</button>
       </div>
        {feedback && <p className={`mt-4 text-sm ${feedback.tone === 'error' ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--secondary))]'}`} role={feedback.tone === 'error' ? 'alert' : 'status'} data-testid={feedback.tone === 'error' ? 'status-service-delete-error' : 'status-service-success'}>{feedback.message}</p>}
@@ -897,7 +897,7 @@ function EmployeeCard({
   const { t } = useLocale();
 
   return (
-    <article className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`employee-card-${stylist.id}`}>
+    <article className="manager-list-row rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`employee-card-${stylist.id}`}>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div className="flex min-w-0 items-start gap-4">
           <StylistAvatar stylist={stylist} className="h-12 w-12 shrink-0" alt={`${stylist.name} ${t('profilePhoto')}`} />
@@ -924,15 +924,17 @@ function ManagerCustomers() {
   const customers = customersQuery.data ?? [];
 
   return (
-    <section className="mt-0 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-4 sm:p-5" data-testid="customer-management">
+       <section id="customer-management" className="manager-section mt-0 rounded-2xl border p-4 sm:p-5" data-testid="customer-management">
       <div className="border-b border-[hsl(var(--border))] pb-4">
-        <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('customerList')}</p>
+         <div className="manager-section-header ps-3">
+           <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('customerList')}</p>
         <h2 className="mt-1 font-display text-3xl">{t('customers')}</h2>
         <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('customerIntro')}</p>
+         </div>
       </div>
       <div className="mt-4 space-y-3">
         {customersQuery.isLoading ? <LoadingCards count={2} /> : customersQuery.isError ? <ErrorMessage retry={() => customersQuery.refetch()} /> : customers.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noCustomers')}</div> : customers.map((customer) => (
-          <article key={customer.email} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`customer-manager-card-${customer.email}`}>
+          <article key={customer.email} className="manager-list-row rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`customer-manager-card-${customer.email}`}>
             <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--primary))]"><UserRound size={16} /></span><div className="min-w-0"><h3 className="truncate font-semibold">{customer.customerName}</h3><p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{customer.email}</p><p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{customer.phone}</p></div></div>
             <div className="mt-4 flex flex-wrap gap-3 border-t border-[hsl(var(--border))] pt-3 font-mono-ui text-[10px] uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]"><span>{customer.appointmentCount} {t('visits')}</span><span>{customer.upcomingAppointmentCount} {t('upcoming')}</span>{customer.lastVisit && <span>{t('lastVisit')} {formatDate(customer.lastVisit, { month: 'short', day: 'numeric' })}</span>}</div>
           </article>
@@ -948,20 +950,116 @@ function ManagerAppointments() {
   const appointments = appointmentsQuery.data ?? [];
 
   return (
-    <section className="mt-0 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-4 sm:p-5" data-testid="appointment-management">
+       <section id="appointment-management" className="manager-section mt-0 rounded-2xl border p-4 sm:p-5" data-testid="appointment-management">
       <div className="border-b border-[hsl(var(--border))] pb-4">
-        <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('appointmentList')}</p>
+         <div className="manager-section-header ps-3">
+           <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('appointmentList')}</p>
         <h2 className="mt-1 font-display text-3xl">{t('appointments')}</h2>
         <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('appointmentIntro')}</p>
+         </div>
       </div>
       <div className="mt-4 space-y-3">
         {appointmentsQuery.isLoading ? <LoadingCards count={2} /> : appointmentsQuery.isError ? <ErrorMessage retry={() => appointmentsQuery.refetch()} /> : appointments.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noAppointments')}</div> : appointments.map((appointment) => (
-          <article key={appointment.id} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`appointment-manager-card-${appointment.id}`}>
+          <article key={appointment.id} className="manager-list-row rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`appointment-manager-card-${appointment.id}`}>
             <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate font-semibold">{appointment.customerName}</h3><p className="mt-1 truncate text-xs text-[hsl(var(--muted-foreground))]">{appointment.email}</p></div><span className="shrink-0 rounded-full bg-[hsl(var(--accent)/.35)] px-2 py-1 font-mono-ui text-[9px] uppercase tracking-[.08em]">{statusLabel(appointment.status)}</span></div>
             <p className="mt-4 font-display text-xl">{appointment.serviceNames.map(translateServiceName).join(' · ')}</p>
             <div className="mt-3 flex flex-wrap gap-3 text-xs text-[hsl(var(--muted-foreground))]"><span className="flex items-center gap-1.5"><CalendarDays size={14} className="text-[hsl(var(--primary))]" />{formatDate(appointment.date, { month: 'short', day: 'numeric' })}</span><span className="flex items-center gap-1.5"><Clock3 size={14} className="text-[hsl(var(--primary))]" />{appointment.time}</span><span>{appointment.stylistName}</span><span>{formatPrice(appointment.totalPrice)}</span></div>
           </article>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function ManagerOverview() {
+  const { t, formatDate, statusLabel, translateServiceName } = useLocale();
+  const servicesQuery = useListServices({ query: { queryKey: getListServicesQueryKey() } });
+  const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
+  const customersQuery = useListManagerCustomers({ query: { queryKey: getListManagerCustomersQueryKey() } });
+  const appointmentsQuery = useListManagerAppointments({ query: { queryKey: getListManagerAppointmentsQueryKey() } });
+  const services = servicesQuery.data ?? [];
+  const stylists = stylistsQuery.data ?? [];
+  const customers = customersQuery.data ?? [];
+  const appointments = appointmentsQuery.data ?? [];
+  const today = localIsoDate(new Date());
+  const upcomingAppointments = useMemo(
+    () => appointments
+      .filter((appointment) => appointment.status !== 'cancelled' && appointment.date >= today)
+      .sort((left, right) => `${left.date} ${left.time}`.localeCompare(`${right.date} ${right.time}`))
+      .slice(0, 4),
+    [appointments, today],
+  );
+  const hasError = servicesQuery.isError || stylistsQuery.isError || customersQuery.isError || appointmentsQuery.isError;
+  const isLoading = servicesQuery.isLoading || stylistsQuery.isLoading || customersQuery.isLoading || appointmentsQuery.isLoading;
+  const retryAll = () => {
+    void servicesQuery.refetch();
+    void stylistsQuery.refetch();
+    void customersQuery.refetch();
+    void appointmentsQuery.refetch();
+  };
+
+  return (
+    <section className="mb-8" aria-labelledby="manager-overview-title" data-testid="manager-overview">
+      <div className="manager-hero relative overflow-hidden rounded-[1.35rem] bg-[hsl(var(--secondary))] p-5 text-[hsl(var(--card))] shadow-[0_20px_50px_hsl(var(--secondary)/.13)] sm:p-7 md:p-9">
+        <div className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full border border-[hsl(var(--accent)/.25)] md:h-96 md:w-96" />
+        <div className="pointer-events-none absolute -right-2 -top-10 h-56 w-56 rounded-full border border-[hsl(var(--accent)/.13)] md:h-72 md:w-72" />
+        <div className="relative grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div className="max-w-2xl reveal">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--accent))]">
+              <span className="h-px w-7 bg-[hsl(var(--accent))]" />
+              <span>{t('managerWorkspace')}</span>
+              <span className="text-[hsl(var(--card)/.38)]">/</span>
+              <span className="text-[hsl(var(--card)/.55)]">{formatDate(new Date(), { weekday: 'long', month: 'short', day: 'numeric' })}</span>
+            </div>
+            <h1 id="manager-overview-title" className="mt-5 max-w-xl font-display text-[clamp(3.8rem,9vw,6.7rem)] leading-[.8] tracking-[-.035em]">{t('workspaceTitle')}</h1>
+            <p className="mt-7 max-w-lg text-sm leading-6 text-[hsl(var(--card)/.68)] sm:text-base">{t('workspaceIntro')}</p>
+          </div>
+          <div className="relative grid grid-cols-2 gap-x-6 gap-y-4 border-t border-[hsl(var(--card)/.16)] pt-5 text-right lg:min-w-[210px] lg:border-l lg:border-t-0 lg:ps-7 lg:pt-0">
+            <div><p className="font-mono-ui text-[9px] uppercase tracking-[.15em] text-[hsl(var(--card)/.48)]">{t('openingHours')}</p><p className="mt-1 text-sm font-semibold">{t('dailyHours')}</p></div>
+            <div><p className="font-mono-ui text-[9px] uppercase tracking-[.15em] text-[hsl(var(--card)/.48)]">{t('active')}</p><p className="mt-1 text-sm font-semibold">{stylists.filter((stylist) => stylist.active !== false).length} {t('activeTeam')}</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, index) => <div key={index} className="skeleton h-[106px] rounded-xl" />)
+        ) : (
+          <>
+            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-services"><div className="flex items-center justify-between"><Scissors size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">01</span></div><p className="mt-5 font-display text-3xl leading-none">{services.length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('activeServices')}</p></div>
+            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-team"><div className="flex items-center justify-between"><UserRound size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">02</span></div><p className="mt-5 font-display text-3xl leading-none">{stylists.filter((stylist) => stylist.active !== false).length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('activeTeam')}</p></div>
+            <div className="manager-stat manager-stat-accent rounded-xl border border-[hsl(var(--secondary))] p-4" data-testid="manager-stat-appointments"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--accent))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--card)/.5)]">03</span></div><p className="mt-5 font-display text-3xl leading-none">{upcomingAppointments.length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--card)/.58)]">{t('nextVisits')}</p></div>
+            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-customers"><div className="flex items-center justify-between"><UserRound size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">04</span></div><p className="mt-5 font-display text-3xl leading-none">{customers.filter((customer) => customer.appointmentCount > 1).length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('returningGuests')}</p></div>
+          </>
+        )}
+      </div>
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-[1.25fr_.75fr]">
+        <div className="manager-section rounded-xl border p-4 sm:p-5" data-testid="manager-next-visits">
+          <div className="flex items-end justify-between gap-4 border-b border-[hsl(var(--border))] pb-4">
+            <div><p className="font-mono-ui text-[10px] uppercase tracking-[.18em] text-[hsl(var(--primary))]">{t('atAGlance')}</p><h2 className="mt-1 font-display text-2xl">{t('nextVisits')}</h2></div>
+            <span className="font-mono-ui text-[9px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{today}</span>
+          </div>
+          {hasError ? <div className="pt-4"><ErrorMessage retry={retryAll} /></div> : upcomingAppointments.length === 0 ? <p className="py-7 text-sm text-[hsl(var(--muted-foreground))]" data-testid="empty-upcoming-appointments">{t('noUpcomingAppointments')}</p> : (
+            <div className="mt-3 divide-y divide-[hsl(var(--border)/.72)]">
+              {upcomingAppointments.map((appointment) => (
+                <div key={appointment.id} className="manager-list-row grid gap-2 py-3 sm:grid-cols-[92px_1fr_auto] sm:items-center" data-testid={`manager-next-appointment-${appointment.id}`}>
+                  <div className="flex items-center gap-2 font-mono-ui text-[10px] uppercase tracking-[.08em] text-[hsl(var(--primary))]"><CalendarDays size={13} /><span>{formatDate(appointment.date, { month: 'short', day: 'numeric' })}</span><span className="text-[hsl(var(--muted-foreground))]">{appointment.time}</span></div>
+                  <div className="min-w-0"><p className="truncate text-sm font-semibold">{appointment.customerName}</p><p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{appointment.serviceNames.map(translateServiceName).join(' · ')} <span className="text-[hsl(var(--border))]">/</span> {appointment.stylistName}</p></div>
+                  <span className="w-fit rounded-full bg-[hsl(var(--accent)/.35)] px-2 py-1 font-mono-ui text-[9px] uppercase tracking-[.08em]">{statusLabel(appointment.status)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="manager-section rounded-xl border p-4 sm:p-5" data-testid="manager-quick-access">
+          <p className="font-mono-ui text-[10px] uppercase tracking-[.18em] text-[hsl(var(--primary))]">{t('quickAccess')}</p>
+          <div className="mt-3 divide-y divide-[hsl(var(--border)/.72)]">
+            <a href="#service-management" className="group flex min-h-[52px] items-center justify-between gap-3 py-3 text-sm font-semibold" data-testid="link-manager-services"><span className="flex items-center gap-3"><Scissors size={15} className="text-[hsl(var(--primary))]" />{t('serviceMenu')}</span><ArrowRight size={15} className="text-[hsl(var(--muted-foreground))] transition-transform group-hover:translate-x-1" /></a>
+            <a href="#employee-management" className="group flex min-h-[52px] items-center justify-between gap-3 py-3 text-sm font-semibold" data-testid="link-manager-team"><span className="flex items-center gap-3"><UserRound size={15} className="text-[hsl(var(--primary))]" />{t('employeeRoster')}</span><ArrowRight size={15} className="text-[hsl(var(--muted-foreground))] transition-transform group-hover:translate-x-1" /></a>
+            <a href="#appointment-management" className="group flex min-h-[52px] items-center justify-between gap-3 py-3 text-sm font-semibold" data-testid="link-manager-appointments"><span className="flex items-center gap-3"><CalendarDays size={15} className="text-[hsl(var(--primary))]" />{t('appointmentList')}</span><ArrowRight size={15} className="text-[hsl(var(--muted-foreground))] transition-transform group-hover:translate-x-1" /></a>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -1005,25 +1103,23 @@ function ManagerSchedule() {
   };
 
   return (
-    <main className="mx-auto max-w-[960px] px-4 py-10 sm:px-6 md:py-16">
-      <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-start">
-        <div className="max-w-2xl reveal">
-           <p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('managerWorkspace')}</p>
-           <h1 className="mt-3 font-display text-5xl leading-[.86] sm:text-7xl">{t('managerWorkspaceShort')}<br /><i>{t('goodHands')}</i></h1>
-           <p className="mt-5 max-w-xl text-sm leading-6 text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')} {t('scheduleIntro')}</p>
-        </div>
-        <button type="button" onClick={() => signOut({ redirectUrl: basePath || '/' })} className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid="button-manager-sign-out">
+    <main className="manager-shell min-h-[calc(100dvh-76px)]">
+      <div className="mx-auto max-w-[1240px] px-4 py-7 sm:px-6 sm:py-10 md:px-8 md:py-12">
+       <div className="mb-4 flex justify-end">
+         <button type="button" onClick={() => signOut({ redirectUrl: basePath || '/' })} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card)/.6)] px-4 py-2.5 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--muted-foreground))] transition-colors hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid="button-manager-sign-out">
            {t('signOut')}
-        </button>
-      </div>
-      <div className="manager-masonry mt-8" data-testid="manager-masonry">
+         </button>
+       </div>
+       <ManagerOverview />
+      <div className="manager-grid grid gap-4 lg:grid-cols-2" data-testid="manager-masonry">
       <ServiceManagement />
-       <section className="mt-0 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-4 sm:p-5" data-testid="employee-management">
-         <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-4 sm:flex-row sm:items-center">
+        <section id="employee-management" className="manager-section mt-0 rounded-2xl border p-4 sm:p-5" data-testid="employee-management">
+          <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-4 sm:flex-row sm:items-center">
            <button type="button" onClick={() => setRosterExpanded((current) => !current)} aria-expanded={rosterExpanded} aria-controls="employee-roster-details" className="min-w-0 text-left">
-             <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('employeeRoster')}</p>
+              <span className="manager-section-header block ps-3"><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('employeeRoster')}</p>
              <span className="mt-1 flex items-center gap-2"><h2 className="font-display text-3xl">{t('theTeam')}</h2><ChevronDown size={17} className={`transition-transform ${rosterExpanded ? 'rotate-180' : ''}`} /></span>
              <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('employeeIntro')}</p>
+              </span>
            </button>
           <button type="button" onClick={() => { setEditing('new'); setFeedback(undefined); }} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--card))] hover:bg-[hsl(var(--secondary)/.88)]" data-testid="button-add-employee"><Plus size={15} /> {t('addEmployee')}</button>
         </div>
@@ -1047,8 +1143,9 @@ function ManagerSchedule() {
         </div>
          </div>
       </section>
-      <ManagerCustomers />
-      <ManagerAppointments />
+       <ManagerCustomers />
+       <ManagerAppointments />
+      </div>
       </div>
     </main>
   );
