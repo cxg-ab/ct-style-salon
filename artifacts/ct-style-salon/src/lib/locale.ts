@@ -49,9 +49,9 @@ type MessageKey =
    | 'editName' | 'employeeName' | 'saveName' | 'nameSaved' | 'nameRequired' | 'nameError'
    | 'deleteService' | 'confirmDeleteService' | 'deleteServiceWarning' | 'confirmDelete'
    | 'serviceDeleted' | 'serviceDeleteError' | 'serviceDeleteConflict'
-   | 'atAGlance' | 'activeServices' | 'activeTeam' | 'nextVisits' | 'returningGuests'
+   | 'atAGlance' | 'activeServices' | 'activeTeam' | 'nextVisits' | 'returningGuests' | 'scheduledCustomers'
    | 'quickAccess' | 'viewAll' | 'noUpcomingAppointments' | 'refreshData' | 'workspaceTitle'
-   | 'workspaceIntro' | 'todayAt' | 'openingHours' | 'active';
+   | 'workspaceIntro' | 'todayAt' | 'openingHours' | 'active' | 'scheduled' | 'openAndEdit' | 'closeSection';
 
 const messages: Record<Locale, Record<MessageKey, string>> = {
   en: {
@@ -163,11 +163,12 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
      confirmDelete: 'Confirm delete', serviceDeleted: 'was removed from the menu.',
      serviceDeleteError: 'We could not delete this service. Try again.', serviceDeleteConflict: 'This service cannot be deleted because it has existing appointments.',
      atAGlance: 'At a glance', activeServices: 'active services', activeTeam: 'active team',
-     nextVisits: 'next visits', returningGuests: 'returning guests', quickAccess: 'Quick access',
+     nextVisits: 'next visits', returningGuests: 'returning guests', scheduledCustomers: 'scheduled customers', quickAccess: 'Quick access',
      viewAll: 'View all', noUpcomingAppointments: 'No upcoming appointments on the books.',
      refreshData: 'Refresh data', workspaceTitle: 'Keep the day moving.',
      workspaceIntro: 'A clear view of the menu, the team, and the guests who are due in next.',
      todayAt: 'Today at', openingHours: 'Opening hours', active: 'Active',
+     scheduled: 'Scheduled', openAndEdit: 'Open & edit', closeSection: 'Close',
   },
   ar: {
     theSalon: 'الصالون', bookVisit: 'احجز زيارة', yourAppointments: 'مواعيدك',
@@ -278,11 +279,12 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
      confirmDelete: 'تأكيد الحذف', serviceDeleted: 'تمت إزالتها من القائمة.',
       serviceDeleteError: 'تعذر حذف الخدمة. حاول مرة أخرى.', serviceDeleteConflict: 'لا يمكن حذف هذه الخدمة لوجود مواعيد مرتبطة بها.',
       atAGlance: 'نظرة سريعة', activeServices: 'خدمات نشطة', activeTeam: 'فريق نشط',
-      nextVisits: 'المواعيد القادمة', returningGuests: 'ضيوف عائدون', quickAccess: 'وصول سريع',
+      nextVisits: 'المواعيد القادمة', returningGuests: 'ضيوف عائدون', scheduledCustomers: 'عملاء لديهم مواعيد', quickAccess: 'وصول سريع',
       viewAll: 'عرض الكل', noUpcomingAppointments: 'لا توجد مواعيد قادمة مسجلة.',
       refreshData: 'تحديث البيانات', workspaceTitle: 'أبقِ اليوم متحركاً.',
       workspaceIntro: 'نظرة واضحة على القائمة والفريق والضيوف القادمين قريباً.',
       todayAt: 'اليوم الساعة', openingHours: 'ساعات العمل', active: 'نشط',
+      scheduled: 'مجدول', openAndEdit: 'فتح وتعديل', closeSection: 'إغلاق',
   },
 };
 

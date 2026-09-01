@@ -820,6 +820,7 @@ function ServiceManagement() {
   const { t, formatPrice } = useLocale();
   const servicesQuery = useListServices({ query: { queryKey: getListServicesQueryKey() } });
   const services = servicesQuery.data ?? [];
+  const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string }>();
   const [confirmingDelete, setConfirmingDelete] = useState<number | null>(null);
@@ -833,10 +834,16 @@ function ServiceManagement() {
 
   return (
     <section id="service-management" className="manager-section mt-0 rounded-2xl border p-4 sm:p-5" data-testid="service-management">
-      <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-4 sm:flex-row sm:items-end">
-         <div className="manager-section-header ps-3"><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('serviceMenu')}</p><h2 className="mt-1 font-display text-3xl">{t('rituals')}</h2><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')}</p></div>
-         <button type="button" onClick={() => { setEditing('new'); setFeedback(undefined); setConfirmingDelete(null); }} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-4 py-2.5 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--card))] hover:bg-[hsl(var(--secondary)/.88)]" data-testid="button-add-service"><Plus size={15} /> {t('addService')}</button>
+      <div className={`flex flex-col justify-between gap-3 sm:flex-row sm:items-end ${expanded ? 'border-b border-[hsl(var(--border))] pb-4' : ''}`}>
+         <button type="button" onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} aria-controls="service-management-details" className="min-w-0 text-left">
+           <span className="manager-section-header block ps-3"><span className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('serviceMenu')}</span><span className="mt-1 flex items-center gap-2"><span className="font-display text-3xl">{t('rituals')}</span><ChevronDown size={17} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} /></span><span className="mt-1 block text-sm text-[hsl(var(--muted-foreground))]">{t('serviceIntroManager')}</span></span>
+         </button>
+         <div className="flex flex-wrap gap-2">
+           <button type="button" onClick={() => setExpanded((current) => !current)} className="inline-flex min-h-10 items-center justify-center rounded-full border border-[hsl(var(--border))] px-4 py-2.5 text-[11px] font-bold tracking-[.08em] hover:border-[hsl(var(--primary))]" data-testid="button-toggle-services">{expanded ? t('closeSection') : t('openAndEdit')}</button>
+           <button type="button" onClick={() => { setExpanded(true); setEditing('new'); setFeedback(undefined); setConfirmingDelete(null); }} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-4 py-2.5 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--card))] hover:bg-[hsl(var(--secondary)/.88)]" data-testid="button-add-service"><Plus size={15} /> {t('addService')}</button>
+         </div>
       </div>
+      <div id="service-management-details" hidden={!expanded}>
        {feedback && <p className={`mt-4 text-sm ${feedback.tone === 'error' ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--secondary))]'}`} role={feedback.tone === 'error' ? 'alert' : 'status'} data-testid={feedback.tone === 'error' ? 'status-service-delete-error' : 'status-service-success'}>{feedback.message}</p>}
       {editing === 'new' && <ServiceEditor onCancel={() => setEditing(null)} onSaved={finishSave} />}
        <div className="mt-4 space-y-2">
@@ -873,6 +880,7 @@ function ServiceManagement() {
         ))}
       </div>
       {typeof editing === 'number' && services.find((service) => service.id === editing) && <ServiceEditor service={services.find((service) => service.id === editing)} onCancel={() => setEditing(null)} onSaved={finishSave} />}
+      </div>
     </section>
   );
 }
@@ -920,19 +928,23 @@ function EmployeeCard({
 
 function ManagerCustomers() {
   const { t, formatDate } = useLocale();
-  const customersQuery = useListManagerCustomers({ query: { queryKey: getListManagerCustomersQueryKey() } });
+  const customersQuery = useListManagerCustomers({ query: { queryKey: getListManagerCustomersQueryKey(), refetchInterval: 15_000, refetchOnWindowFocus: true } });
   const customers = customersQuery.data ?? [];
+  const [expanded, setExpanded] = useState(false);
 
   return (
        <section id="customer-management" className="manager-section mt-0 rounded-2xl border p-4 sm:p-5" data-testid="customer-management">
-      <div className="border-b border-[hsl(var(--border))] pb-4">
-         <div className="manager-section-header ps-3">
-           <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('customerList')}</p>
-        <h2 className="mt-1 font-display text-3xl">{t('customers')}</h2>
-        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('customerIntro')}</p>
-         </div>
+      <div className={`flex flex-col justify-between gap-3 sm:flex-row sm:items-center ${expanded ? 'border-b border-[hsl(var(--border))] pb-4' : ''}`}>
+        <button type="button" onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} aria-controls="customer-management-details" className="min-w-0 text-left">
+          <span className="manager-section-header block ps-3">
+            <span className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('customerList')}</span>
+            <span className="mt-1 flex items-center gap-2"><span className="font-display text-3xl">{t('customers')}</span><ChevronDown size={17} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} /></span>
+            <span className="mt-1 block text-xs text-[hsl(var(--muted-foreground))]">{t('customerIntro')}</span>
+          </span>
+        </button>
+        <button type="button" onClick={() => setExpanded((current) => !current)} className="inline-flex min-h-10 items-center justify-center rounded-full border border-[hsl(var(--border))] px-4 py-2.5 text-[11px] font-bold tracking-[.08em] hover:border-[hsl(var(--primary))]" data-testid="button-toggle-customers">{expanded ? t('closeSection') : t('openAndEdit')}</button>
       </div>
-      <div className="mt-4 space-y-3">
+      <div id="customer-management-details" className="mt-4 space-y-3" hidden={!expanded}>
         {customersQuery.isLoading ? <LoadingCards count={2} /> : customersQuery.isError ? <ErrorMessage retry={() => customersQuery.refetch()} /> : customers.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noCustomers')}</div> : customers.map((customer) => (
           <article key={customer.email} className="manager-list-row rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`customer-manager-card-${customer.email}`}>
             <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--primary))]"><UserRound size={16} /></span><div className="min-w-0"><h3 className="truncate font-semibold">{customer.customerName}</h3><p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{customer.email}</p><p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{customer.phone}</p></div></div>
@@ -946,8 +958,15 @@ function ManagerCustomers() {
 
 function ManagerAppointments() {
   const { t, formatDate, formatPrice, statusLabel, translateServiceName } = useLocale();
-  const appointmentsQuery = useListManagerAppointments({ query: { queryKey: getListManagerAppointmentsQueryKey() } });
+  const appointmentsQuery = useListManagerAppointments({ query: { queryKey: getListManagerAppointmentsQueryKey(), refetchInterval: 15_000, refetchOnWindowFocus: true } });
   const appointments = appointmentsQuery.data ?? [];
+  const managerStatusLabel = (status: string) => status.toLowerCase() === 'pending' ? t('scheduled') : statusLabel(status);
+  const statusClass = (status: string) => {
+    const normalized = status.toLowerCase();
+    if (normalized === 'confirmed') return 'manager-status-confirmed';
+    if (normalized === 'cancelled') return 'manager-status-cancelled';
+    return 'manager-status-scheduled';
+  };
 
   return (
        <section id="appointment-management" className="manager-section mt-0 rounded-2xl border p-4 sm:p-5" data-testid="appointment-management">
@@ -961,7 +980,7 @@ function ManagerAppointments() {
       <div className="mt-4 space-y-3">
         {appointmentsQuery.isLoading ? <LoadingCards count={2} /> : appointmentsQuery.isError ? <ErrorMessage retry={() => appointmentsQuery.refetch()} /> : appointments.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noAppointments')}</div> : appointments.map((appointment) => (
           <article key={appointment.id} className="manager-list-row rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`appointment-manager-card-${appointment.id}`}>
-            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate font-semibold">{appointment.customerName}</h3><p className="mt-1 truncate text-xs text-[hsl(var(--muted-foreground))]">{appointment.email}</p></div><span className="shrink-0 rounded-full bg-[hsl(var(--accent)/.35)] px-2 py-1 font-mono-ui text-[9px] uppercase tracking-[.08em]">{statusLabel(appointment.status)}</span></div>
+            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate font-semibold">{appointment.customerName}</h3><p className="mt-1 truncate text-xs text-[hsl(var(--muted-foreground))]">{appointment.email}</p></div><span className={`manager-status-badge ${statusClass(appointment.status)}`}>{managerStatusLabel(appointment.status)}</span></div>
             <p className="mt-4 font-display text-xl">{appointment.serviceNames.map(translateServiceName).join(' · ')}</p>
             <div className="mt-3 flex flex-wrap gap-3 text-xs text-[hsl(var(--muted-foreground))]"><span className="flex items-center gap-1.5"><CalendarDays size={14} className="text-[hsl(var(--primary))]" />{formatDate(appointment.date, { month: 'short', day: 'numeric' })}</span><span className="flex items-center gap-1.5"><Clock3 size={14} className="text-[hsl(var(--primary))]" />{appointment.time}</span><span>{appointment.stylistName}</span><span>{formatPrice(appointment.totalPrice)}</span></div>
           </article>
@@ -975,8 +994,8 @@ function ManagerOverview() {
   const { t, formatDate, statusLabel, translateServiceName } = useLocale();
   const servicesQuery = useListServices({ query: { queryKey: getListServicesQueryKey() } });
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
-  const customersQuery = useListManagerCustomers({ query: { queryKey: getListManagerCustomersQueryKey() } });
-  const appointmentsQuery = useListManagerAppointments({ query: { queryKey: getListManagerAppointmentsQueryKey() } });
+  const customersQuery = useListManagerCustomers({ query: { queryKey: getListManagerCustomersQueryKey(), refetchInterval: 15_000, refetchOnWindowFocus: true } });
+  const appointmentsQuery = useListManagerAppointments({ query: { queryKey: getListManagerAppointmentsQueryKey(), refetchInterval: 15_000, refetchOnWindowFocus: true } });
   const services = servicesQuery.data ?? [];
   const stylists = stylistsQuery.data ?? [];
   const customers = customersQuery.data ?? [];
@@ -991,6 +1010,13 @@ function ManagerOverview() {
   );
   const hasError = servicesQuery.isError || stylistsQuery.isError || customersQuery.isError || appointmentsQuery.isError;
   const isLoading = servicesQuery.isLoading || stylistsQuery.isLoading || customersQuery.isLoading || appointmentsQuery.isLoading;
+  const managerStatusLabel = (status: string) => status.toLowerCase() === 'pending' ? t('scheduled') : statusLabel(status);
+  const statusClass = (status: string) => {
+    const normalized = status.toLowerCase();
+    if (normalized === 'confirmed') return 'manager-status-confirmed';
+    if (normalized === 'cancelled') return 'manager-status-cancelled';
+    return 'manager-status-scheduled';
+  };
   const retryAll = () => {
     void servicesQuery.refetch();
     void stylistsQuery.refetch();
@@ -1029,12 +1055,13 @@ function ManagerOverview() {
             <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-services"><div className="flex items-center justify-between"><Scissors size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">01</span></div><p className="mt-5 font-display text-3xl leading-none">{services.length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('activeServices')}</p></div>
             <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-team"><div className="flex items-center justify-between"><UserRound size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">02</span></div><p className="mt-5 font-display text-3xl leading-none">{stylists.filter((stylist) => stylist.active !== false).length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('activeTeam')}</p></div>
             <div className="manager-stat manager-stat-accent rounded-xl border border-[hsl(var(--secondary))] p-4" data-testid="manager-stat-appointments"><div className="flex items-center justify-between"><CalendarDays size={16} className="text-[hsl(var(--accent))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--card)/.5)]">03</span></div><p className="mt-5 font-display text-3xl leading-none">{upcomingAppointments.length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--card)/.58)]">{t('nextVisits')}</p></div>
-            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-customers"><div className="flex items-center justify-between"><UserRound size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">04</span></div><p className="mt-5 font-display text-3xl leading-none">{customers.filter((customer) => customer.appointmentCount > 1).length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('returningGuests')}</p></div>
+            <div className="manager-stat rounded-xl border border-[hsl(var(--border))] p-4" data-testid="manager-stat-customers"><div className="flex items-center justify-between"><UserRound size={16} className="text-[hsl(var(--primary))]" /><span className="font-mono-ui text-[9px] text-[hsl(var(--muted-foreground))]">04</span></div><p className="mt-5 font-display text-3xl leading-none">{customers.filter((customer) => customer.upcomingAppointmentCount > 0).length}</p><p className="mt-1 text-[10px] font-semibold uppercase tracking-[.1em] text-[hsl(var(--muted-foreground))]">{t('scheduledCustomers')}</p></div>
           </>
         )}
       </div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-[1.25fr_.75fr]">
+      <div className="mt-3 grid items-start gap-3 lg:grid-cols-[1.25fr_.75fr]">
+        <div className="space-y-3">
         <div className="manager-section rounded-xl border p-4 sm:p-5" data-testid="manager-next-visits">
           <div className="flex items-end justify-between gap-4 border-b border-[hsl(var(--border))] pb-4">
             <div><p className="font-mono-ui text-[10px] uppercase tracking-[.18em] text-[hsl(var(--primary))]">{t('atAGlance')}</p><h2 className="mt-1 font-display text-2xl">{t('nextVisits')}</h2></div>
@@ -1046,11 +1073,13 @@ function ManagerOverview() {
                 <div key={appointment.id} className="manager-list-row grid gap-2 py-3 sm:grid-cols-[92px_1fr_auto] sm:items-center" data-testid={`manager-next-appointment-${appointment.id}`}>
                   <div className="flex items-center gap-2 font-mono-ui text-[10px] uppercase tracking-[.08em] text-[hsl(var(--primary))]"><CalendarDays size={13} /><span>{formatDate(appointment.date, { month: 'short', day: 'numeric' })}</span><span className="text-[hsl(var(--muted-foreground))]">{appointment.time}</span></div>
                   <div className="min-w-0"><p className="truncate text-sm font-semibold">{appointment.customerName}</p><p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{appointment.serviceNames.map(translateServiceName).join(' · ')} <span className="text-[hsl(var(--border))]">/</span> {appointment.stylistName}</p></div>
-                  <span className="w-fit rounded-full bg-[hsl(var(--accent)/.35)] px-2 py-1 font-mono-ui text-[9px] uppercase tracking-[.08em]">{statusLabel(appointment.status)}</span>
+                  <span className={`manager-status-badge ${statusClass(appointment.status)}`}>{managerStatusLabel(appointment.status)}</span>
                 </div>
               ))}
             </div>
           )}
+        </div>
+        <ManagerAppointments />
         </div>
         <div className="manager-section rounded-xl border p-4 sm:p-5" data-testid="manager-quick-access">
           <p className="font-mono-ui text-[10px] uppercase tracking-[.18em] text-[hsl(var(--primary))]">{t('quickAccess')}</p>
@@ -1070,7 +1099,7 @@ function ManagerSchedule() {
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
   const stylists = stylistsQuery.data ?? [];
   const [editing, setEditing] = useState<number | 'new' | null>(null);
-  const [rosterExpanded, setRosterExpanded] = useState(true);
+  const [rosterExpanded, setRosterExpanded] = useState(false);
   const [feedback, setFeedback] = useState<string>();
   const deleteStylist = useDeleteStylist();
   const { signOut } = useClerk();
@@ -1114,14 +1143,17 @@ function ManagerSchedule() {
       <div className="manager-grid grid gap-4 lg:grid-cols-2" data-testid="manager-masonry">
       <ServiceManagement />
         <section id="employee-management" className="manager-section mt-0 rounded-2xl border p-4 sm:p-5" data-testid="employee-management">
-          <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-4 sm:flex-row sm:items-center">
+          <div className={`flex flex-col justify-between gap-3 sm:flex-row sm:items-center ${rosterExpanded ? 'border-b border-[hsl(var(--border))] pb-4' : ''}`}>
            <button type="button" onClick={() => setRosterExpanded((current) => !current)} aria-expanded={rosterExpanded} aria-controls="employee-roster-details" className="min-w-0 text-left">
               <span className="manager-section-header block ps-3"><p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('employeeRoster')}</p>
              <span className="mt-1 flex items-center gap-2"><h2 className="font-display text-3xl">{t('theTeam')}</h2><ChevronDown size={17} className={`transition-transform ${rosterExpanded ? 'rotate-180' : ''}`} /></span>
              <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('employeeIntro')}</p>
               </span>
            </button>
-          <button type="button" onClick={() => { setEditing('new'); setFeedback(undefined); }} className="inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--card))] hover:bg-[hsl(var(--secondary)/.88)]" data-testid="button-add-employee"><Plus size={15} /> {t('addEmployee')}</button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setRosterExpanded((current) => !current)} className="inline-flex min-h-10 items-center justify-center rounded-full border border-[hsl(var(--border))] px-4 py-2.5 text-[11px] font-bold tracking-[.08em] hover:border-[hsl(var(--primary))]" data-testid="button-toggle-employees">{rosterExpanded ? t('closeSection') : t('openAndEdit')}</button>
+            <button type="button" onClick={() => { setRosterExpanded(true); setEditing('new'); setFeedback(undefined); }} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[hsl(var(--secondary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--card))] hover:bg-[hsl(var(--secondary)/.88)]" data-testid="button-add-employee"><Plus size={15} /> {t('addEmployee')}</button>
+          </div>
         </div>
          <div id="employee-roster-details" hidden={!rosterExpanded}>
         {feedback && <p className="mt-5 text-sm text-[hsl(var(--secondary))]" role="status" data-testid="status-employee-success">{feedback}</p>}
@@ -1144,7 +1176,6 @@ function ManagerSchedule() {
          </div>
       </section>
        <ManagerCustomers />
-       <ManagerAppointments />
       </div>
       </div>
     </main>

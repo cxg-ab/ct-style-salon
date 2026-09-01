@@ -343,6 +343,40 @@
   background: hsl(var(--card) / .9);
 }
 
+.manager-status-badge {
+  display: inline-flex;
+  width: fit-content;
+  flex-shrink: 0;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: .3rem .55rem;
+  font-family: var(--app-font-mono);
+  font-size: .5625rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.manager-status-confirmed {
+  border-color: hsl(145 52% 36% / .25);
+  background: hsl(145 52% 36% / .12);
+  color: hsl(145 56% 27%);
+}
+
+.manager-status-cancelled {
+  border-color: hsl(var(--destructive) / .25);
+  background: hsl(var(--destructive) / .1);
+  color: hsl(var(--destructive));
+}
+
+.manager-status-scheduled {
+  border-color: hsl(209 64% 45% / .24);
+  background: hsl(209 64% 45% / .11);
+  color: hsl(209 68% 35%);
+}
+
 .manager-masonry {
   column-count: 1;
   column-gap: 1rem;
