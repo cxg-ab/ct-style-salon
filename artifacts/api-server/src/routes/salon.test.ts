@@ -12,6 +12,10 @@ import {
 } from "@workspace/db";
 import type { StylistScheduleEntry } from "../lib/salon-seed";
 import { ObjectStorageService } from "../lib/objectStorage";
+import {
+  resetSalonClockForTests,
+  setSalonClockForTests,
+} from "./salon";
 
 const testDate = "2099-09-07";
 const employeeScopeDate = "2099-09-21";
@@ -20,6 +24,7 @@ const employeeScopeEmail = "employee-scope-regression@example.com";
 const bundleEmail = "bundle-regression@example.com";
 const managerEditEmail = "manager-edit-regression@example.com";
 const lifecycleEmail = "stylist-lifecycle@example.com";
+const uaeBoundaryEmail = "uae-boundary@example.com";
 const serviceTestName = "Automated Service Regression";
 const managerHeaders = { "x-salon-manager": "true" };
 let server: Server;
@@ -136,6 +141,7 @@ before(async () => {
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, bundleEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, managerEditEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, lifecycleEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, uaeBoundaryEmail));
   if (createdStylistId) {
     await db.delete(stylistsTable).where(eq(stylistsTable.id, createdStylistId));
   }
@@ -176,6 +182,7 @@ before(async () => {
 });
 
 after(async () => {
+  resetSalonClockForTests();
   for (const [stylistId, name] of originalStylistNames) {
     await updateStylistName(stylistId, name);
   }
@@ -187,6 +194,7 @@ after(async () => {
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, bundleEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, managerEditEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, lifecycleEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, uaeBoundaryEmail));
   if (createdServiceId) {
     await db.delete(servicesTable).where(eq(servicesTable.id, createdServiceId));
   }
@@ -716,21 +724,10 @@ test("different employees return different slots for the same date", async () =>
 });
 
 test("today's availability excludes times already passed in the UAE", async () => {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Dubai",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    })
-      .formatToParts(new Date())
-      .map(({ type, value }) => [type, value]),
-  );
-  const uaeDate = `${parts.year}-${parts.month}-${parts.day}`;
-  const currentMinutes = Number(parts.hour) * 60 + Number(parts.minute);
+  const fakeNow = new Date("2026-05-10T19:59:00.000Z");
+  setSalonClockForTests(() => fakeNow);
+  const uaeDate = "2026-05-10";
+  const currentMinutes = 23 * 60 + 59;
   const weekday = new Date(`${uaeDate}T00:00:00.000Z`).getUTCDay();
   const slotMinutes = (value: string) => {
     const match = /^(\d{1,2}):(\d{2}) (AM|PM)$/.exec(value);
@@ -764,6 +761,86 @@ test("today's availability excludes times already passed in the UAE", async () =
   });
   assert.equal(passedBooking.response.status, 400);
   assert.match(passedBooking.body.error, /already passed in the UAE/i);
+  resetSalonClockForTests();
+});
+
+test("UAE booking rules stay correct before and after midnight at the five-day boundary", async () => {
+  const fakeNow = new Date("2026-05-10T19:59:00.000Z");
+  setSalonClockForTests(() => fakeNow);
+  const originalNodeEnv = process.env.NODE_ENV;
+  try {
+    await updateSchedule(aishaId, [
+      { dayOfWeek: 0, openTime: "23:00", closeTime: "23:59" },
+      { dayOfWeek: 1, openTime: "00:00", closeTime: "03:00" },
+      { dayOfWeek: 6, openTime: "10:00", closeTime: "12:00" },
+    ]);
+
+    process.env.NODE_ENV = "development";
+    const beforeMidnight = await request<Array<{ slots: string[] }>>(
+      "/api/availability?date=2026-05-10&stylistId=" +
+        `${aishaId}&serviceId=${signatureCutId}`,
+    );
+    assert.equal(beforeMidnight.response.status, 200);
+    assert.deepEqual(beforeMidnight.body[0]?.slots, []);
+
+    const lastMinuteBooking = await request<{ error: string }>("/api/appointments", {
+      method: "POST",
+      body: JSON.stringify({
+        serviceId: signatureCutId,
+        stylistId: aishaId,
+        customerName: "UAE Boundary Guest",
+        email: uaeBoundaryEmail,
+        phone: "+971500000000",
+        date: "2026-05-10",
+        time: "11:00 PM",
+      }),
+    });
+    assert.equal(lastMinuteBooking.response.status, 400);
+    assert.match(lastMinuteBooking.body.error, /already passed in the UAE/i);
+
+    fakeNow.setTime(new Date("2026-05-10T20:01:00.000Z").getTime());
+    const afterMidnight = await request<Array<{ slots: string[] }>>(
+      "/api/availability?date=2026-05-11&stylistId=" +
+        `${aishaId}&serviceId=${signatureCutId}`,
+    );
+    assert.equal(afterMidnight.response.status, 200);
+    assert.deepEqual(afterMidnight.body[0]?.slots, ["1:30 AM"]);
+
+    const firstMinuteBooking = await request<{ date: string; time: string }>(
+      "/api/appointments",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          serviceId: signatureCutId,
+          stylistId: aishaId,
+          customerName: "UAE Boundary Guest",
+          email: uaeBoundaryEmail,
+          phone: "+971500000000",
+          date: "2026-05-11",
+          time: "1:30 AM",
+        }),
+      },
+    );
+    assert.equal(firstMinuteBooking.response.status, 201);
+    assert.equal(firstMinuteBooking.body.date, "2026-05-11T00:00:00.000Z");
+    assert.equal(firstMinuteBooking.body.time, "1:30 AM");
+
+    const fiveDaysAhead = await request<Array<{ date: string }>>(
+      "/api/availability?date=2026-05-16&stylistId=" +
+        `${aishaId}&serviceId=${signatureCutId}`,
+    );
+    assert.equal(fiveDaysAhead.response.status, 200);
+
+    const sixDaysAhead = await request<{ error: string }>(
+      "/api/availability?date=2026-05-17&stylistId=" +
+        `${aishaId}&serviceId=${signatureCutId}`,
+    );
+    assert.equal(sixDaysAhead.response.status, 400);
+    assert.match(sixDaysAhead.body.error, /next five days/i);
+  } finally {
+    process.env.NODE_ENV = originalNodeEnv;
+    resetSalonClockForTests();
+  }
 });
 
 test("a booking blocks only the employee who owns that booking", async () => {

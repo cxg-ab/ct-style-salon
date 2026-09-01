@@ -51,6 +51,9 @@ const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 const MAX_BOOKING_DAYS_AHEAD = 5;
 const UAE_TIME_ZONE = "Asia/Dubai";
+export type SalonClock = () => Date;
+const systemClock: SalonClock = () => new Date();
+let salonClock: SalonClock = systemClock;
 type BookedAppointment = {
   time: string;
   durationMinutes: number;
@@ -255,12 +258,24 @@ function uaeDateTimeParts(value = new Date()): {
   };
 }
 
+export function setSalonClockForTests(clock: SalonClock): void {
+  salonClock = clock;
+}
+
+export function resetSalonClockForTests(): void {
+  salonClock = systemClock;
+}
+
+function currentUaeDateTimeParts() {
+  return uaeDateTimeParts(salonClock());
+}
+
 function isFutureUaeSlot(date: string, time: string): boolean {
   const requestedMinutes = timeToMinutes(time);
   if (requestedMinutes === undefined) {
     return false;
   }
-  const current = uaeDateTimeParts();
+  const current = currentUaeDateTimeParts();
   if (date > current.date) {
     return true;
   }
@@ -305,7 +320,7 @@ function appointmentResponse(
 }
 
 function isWithinBookingWindow(date: Date): boolean {
-  const today = uaeDateTimeParts().date;
+  const today = currentUaeDateTimeParts().date;
   const [todayYear, todayMonth, todayDay] = today.split("-").map(Number);
   const todayUtc = Date.UTC(todayYear, todayMonth - 1, todayDay);
   const requestedUtc = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
