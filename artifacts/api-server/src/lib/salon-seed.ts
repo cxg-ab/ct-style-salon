@@ -1,6 +1,9 @@
 import { eq } from "drizzle-orm";
 import { db, servicesTable, stylistsTable } from "@workspace/db";
 
+const demoPhotoUrl = "/demo-employee-photo.jpg";
+const legacyDemoPhotoUrl = "/ct-style-salon/demo-employee-photo.jpg";
+
 const seedServices = [
   {
     name: "Signature Cut",
@@ -43,6 +46,7 @@ const seedStylists = [
     bio: "Known for clean lines, modern texture, and a calm chair-side ritual.",
     initials: "MC",
     accent: "copper",
+    photoUrl: demoPhotoUrl,
     schedule: [
       { dayOfWeek: 1, openTime: "10:00", closeTime: "20:30" },
       { dayOfWeek: 2, openTime: "10:00", closeTime: "20:30" },
@@ -171,7 +175,7 @@ export async function ensureSalonSeeded(): Promise<void> {
   }
 
   const existingStylists = await db
-    .select({ id: stylistsTable.id, name: stylistsTable.name, schedule: stylistsTable.schedule })
+    .select({ id: stylistsTable.id, name: stylistsTable.name, photoUrl: stylistsTable.photoUrl, schedule: stylistsTable.schedule })
     .from(stylistsTable)
     .orderBy(stylistsTable.id);
   if (existingStylists.length === 0) {
@@ -179,12 +183,16 @@ export async function ensureSalonSeeded(): Promise<void> {
     return;
   }
 
+  const demoStylistId = existingStylists[0]?.id;
   for (const stylist of existingStylists) {
     const defaultSchedule = defaultStylistSchedules[stylist.name];
-    if (defaultSchedule && stylist.schedule.length === 0) {
+    const updates: { schedule?: typeof defaultSchedule; photoUrl?: string } = {};
+    if (defaultSchedule && stylist.schedule.length === 0) updates.schedule = defaultSchedule;
+    if (stylist.id === demoStylistId && (!stylist.photoUrl || stylist.photoUrl === legacyDemoPhotoUrl)) updates.photoUrl = demoPhotoUrl;
+    if (Object.keys(updates).length > 0) {
       await db
         .update(stylistsTable)
-        .set({ schedule: defaultSchedule })
+        .set(updates)
         .where(eq(stylistsTable.id, stylist.id));
     }
   }
