@@ -1027,7 +1027,7 @@ function EmployeeCard({
         </div>
       </div>
       {isEditing && <EmployeeProfileEditor stylist={stylist} onCancel={onCancel} onSaved={onSaved} />}
-      {!isEditing && <ScheduleEditor stylist={stylist} embedded />}
+      <ScheduleEditor stylist={stylist} embedded />
     </article>
   );
 }
@@ -2338,12 +2338,6 @@ function EmployeeProfileEditor({
         <label className="text-xs font-semibold sm:col-span-2">{t('description')} <span className="font-normal text-[hsl(var(--muted-foreground))]">({t('optional')})</span>
           <textarea value={form.bio} onChange={(event) => updateField('bio', event.target.value)} rows={3} className="mt-2 w-full resize-y rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 py-3 text-sm font-normal" data-testid="input-employee-bio" />
         </label>
-      </div>
-      <div className="mt-7">
-        <div className="mb-3 flex items-end justify-between gap-3">
-          <div><p className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-[hsl(var(--primary))]">{t('workingSchedule')}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('scheduleIntro')}</p></div>
-        </div>
-        <ScheduleFields schedule={form.schedule} onChange={(schedule) => updateField('schedule', schedule)} idPrefix={stylist ? String(stylist.id) : 'new'} />
       </div>
       {feedback && <p className="mt-4 text-sm text-[hsl(var(--destructive))]" role="alert" data-testid="status-employee-error">{feedback}</p>}
       <button type="submit" disabled={isPending || photoUpload.status === 'uploading'} className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))] disabled:opacity-60" data-testid="button-save-employee">
