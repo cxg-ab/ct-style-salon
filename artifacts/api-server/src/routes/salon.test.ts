@@ -11,6 +11,7 @@ import {
   stylistsTable,
 } from "@workspace/db";
 import type { StylistScheduleEntry } from "../lib/salon-seed";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const testDate = "2099-09-07";
 const testEmail = "schedule-regression@example.com";
@@ -584,6 +585,82 @@ test("manager roster lifecycle persists edits and archives employees with appoin
   );
   assert.equal(history.response.status, 200);
   assert.equal(history.body[0]?.stylistName, "Updated Lifecycle Employee");
+});
+
+test("employee photo cleanup deletes only unreferenced managed objects", async () => {
+  const sharedPhotoPath = "/objects/uploads/photo-cleanup-shared";
+  const replacementPhotoPath = "/objects/uploads/photo-cleanup-replacement";
+  const [first, second] = await db
+    .insert(stylistsTable)
+    .values([
+      {
+        name: "Photo Cleanup First",
+        role: "Guest Stylist",
+        bio: "A temporary employee for photo cleanup coverage.",
+        initials: "PCF",
+        accent: "#B86B45",
+        photoUrl: sharedPhotoPath,
+        schedule: [],
+        active: true,
+      },
+      {
+        name: "Photo Cleanup Second",
+        role: "Guest Stylist",
+        bio: "Another temporary employee for photo cleanup coverage.",
+        initials: "PCS",
+        accent: "#6B705C",
+        photoUrl: sharedPhotoPath,
+        schedule: [],
+        active: true,
+      },
+    ])
+    .returning({ id: stylistsTable.id });
+  const deletedPaths: string[] = [];
+  const originalDeleteObjectEntity = ObjectStorageService.prototype.deleteObjectEntity;
+  ObjectStorageService.prototype.deleteObjectEntity = async function (objectPath) {
+    deletedPaths.push(objectPath);
+  };
+
+  const updatePhoto = (stylistId: number, photoUrl: string | null) =>
+    request<{ photoUrl: string | null }>(`/api/stylists/${stylistId}`, {
+      method: "PATCH",
+      headers: managerHeaders,
+      body: JSON.stringify({
+        name: stylistId === first.id ? "Photo Cleanup First" : "Photo Cleanup Second",
+        role: "Guest Stylist",
+        bio: "A temporary employee for photo cleanup coverage.",
+        initials: stylistId === first.id ? "PCF" : "PCS",
+        accent: stylistId === first.id ? "#B86B45" : "#6B705C",
+        photoUrl,
+        schedule: [],
+      }),
+    });
+
+  try {
+    const firstReplacement = await updatePhoto(first.id, replacementPhotoPath);
+    assert.equal(firstReplacement.response.status, 200);
+    assert.deepEqual(deletedPaths, []);
+
+    const secondCleared = await updatePhoto(second.id, null);
+    assert.equal(secondCleared.response.status, 200);
+    assert.deepEqual(deletedPaths, [sharedPhotoPath]);
+
+    const firstCleared = await updatePhoto(first.id, null);
+    assert.equal(firstCleared.response.status, 200);
+    assert.deepEqual(deletedPaths, [sharedPhotoPath, replacementPhotoPath]);
+
+    await db
+      .update(stylistsTable)
+      .set({ photoUrl: "https://cdn.example.com/legacy-photo.jpg" })
+      .where(eq(stylistsTable.id, first.id));
+    const externalReplacement = await updatePhoto(first.id, "https://cdn.example.com/new-photo.jpg");
+    assert.equal(externalReplacement.response.status, 200);
+    assert.deepEqual(deletedPaths, [sharedPhotoPath, replacementPhotoPath]);
+  } finally {
+    ObjectStorageService.prototype.deleteObjectEntity = originalDeleteObjectEntity;
+    await db.delete(stylistsTable).where(eq(stylistsTable.id, first.id));
+    await db.delete(stylistsTable).where(eq(stylistsTable.id, second.id));
+  }
 });
 
 test("manager can rename an employee without losing their schedule", async () => {

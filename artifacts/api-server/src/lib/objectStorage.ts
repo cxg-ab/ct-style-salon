@@ -51,14 +51,7 @@ export class ObjectStorageService {
   }
 
   async getObjectEntityFile(objectPath: string): Promise<File> {
-    if (!objectPath.startsWith("/objects/")) {
-      throw new ObjectNotFoundError();
-    }
-
-    const entityId = objectPath.slice("/objects/".length);
-    if (!entityId || entityId.includes("..") || entityId.includes("\\")) {
-      throw new ObjectNotFoundError();
-    }
+    const entityId = getObjectEntityId(objectPath);
 
     const { bucketName, objectName } = parseObjectPath(
       `${this.getPrivateObjectDir()}/${entityId}`,
@@ -69,6 +62,17 @@ export class ObjectStorageService {
       throw new ObjectNotFoundError();
     }
     return file;
+  }
+
+  async deleteObjectEntity(objectPath: string): Promise<void> {
+    const entityId = getObjectEntityId(objectPath);
+    const { bucketName, objectName } = parseObjectPath(
+      `${this.getPrivateObjectDir()}/${entityId}`,
+    );
+    await objectStorageClient
+      .bucket(bucketName)
+      .file(objectName)
+      .delete({ ignoreNotFound: true });
   }
 
   normalizeObjectEntityPath(rawPath: string): string {
@@ -97,6 +101,18 @@ export class ObjectStorageService {
     }
     return new Response(webStream, { headers });
   }
+}
+
+function getObjectEntityId(objectPath: string): string {
+  if (!objectPath.startsWith("/objects/")) {
+    throw new ObjectNotFoundError();
+  }
+
+  const entityId = objectPath.slice("/objects/".length);
+  if (!entityId || entityId.includes("..") || entityId.includes("\\")) {
+    throw new ObjectNotFoundError();
+  }
+  return entityId;
 }
 
 function parseObjectPath(path: string): { bucketName: string; objectName: string } {

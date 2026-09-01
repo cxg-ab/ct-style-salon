@@ -37,8 +37,10 @@ import {
   ensureSalonSeeded,
   type StylistScheduleEntry,
 } from "../lib/salon-seed";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
+const objectStorageService = new ObjectStorageService();
 type BookedAppointment = {
   time: string;
   durationMinutes: number;
@@ -271,6 +273,38 @@ function storedPhotoPath(photoUrl: string | null | undefined): string | null {
     return `/objects/${photoUrl.slice(storagePrefix.length)}`;
   }
   return photoUrl;
+}
+
+function managedPhotoPath(photoUrl: string | null | undefined): string | null {
+  const path = storedPhotoPath(photoUrl);
+  return path?.startsWith("/objects/") ? path : null;
+}
+
+async function cleanupReplacedPhoto(
+  stylistId: number,
+  previousPhotoUrl: string | null | undefined,
+  nextPhotoUrl: string | null | undefined,
+  req: Request,
+): Promise<void> {
+  try {
+    const previousPath = managedPhotoPath(previousPhotoUrl);
+    const nextPath = managedPhotoPath(nextPhotoUrl);
+    if (!previousPath || previousPath === nextPath) {
+      return;
+    }
+
+    const referencedPhotos = await db
+      .select({ photoUrl: stylistsTable.photoUrl })
+      .from(stylistsTable)
+      .where(ne(stylistsTable.id, stylistId));
+    if (referencedPhotos.some((row) => managedPhotoPath(row.photoUrl) === previousPath)) {
+      return;
+    }
+
+    await objectStorageService.deleteObjectEntity(previousPath);
+  } catch (error) {
+    req.log?.error({ err: error }, "Error deleting replaced employee photo");
+  }
 }
 
 function validateStylistPayload(payload: {
@@ -584,6 +618,17 @@ router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
     return;
   }
 
+  const [existing] = await db
+    .select({ photoUrl: stylistsTable.photoUrl })
+    .from(stylistsTable)
+    .where(and(eq(stylistsTable.id, params.data.stylistId), eq(stylistsTable.active, true)))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Employee not found." });
+    return;
+  }
+
+  const nextPhotoUrl = storedPhotoPath(body.data.photoUrl?.trim());
   const [updated] = await db
     .update(stylistsTable)
     .set({
@@ -592,7 +637,7 @@ router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
       bio: body.data.bio.trim(),
       initials: body.data.initials.trim().toUpperCase(),
       accent: body.data.accent.trim(),
-      photoUrl: storedPhotoPath(body.data.photoUrl?.trim()),
+      photoUrl: nextPhotoUrl,
       schedule: body.data.schedule,
     })
     .where(and(eq(stylistsTable.id, params.data.stylistId), eq(stylistsTable.active, true)))
@@ -602,6 +647,7 @@ router.patch("/stylists/:stylistId", async (req, res): Promise<void> => {
     return;
   }
 
+  await cleanupReplacedPhoto(params.data.stylistId, existing.photoUrl, nextPhotoUrl, req);
   res.json(UpdateStylistResponse.parse(stylistResponse(updated)));
 });
 
