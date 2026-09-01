@@ -443,11 +443,11 @@ paths:
     get:
       operationId: listAppointments
       tags: [salon]
-      summary: List appointments for a guest email
+      summary: List the signed-in customer's appointments or guest appointments by email
       parameters:
         - name: email
           in: query
-          required: true
+          required: false
           schema:
             type: string
             format: email
@@ -483,6 +483,125 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /appointments/{appointmentId}:
+    patch:
+      operationId: updateAppointment
+      tags: [salon]
+      summary: Reschedule an appointment owned by the signed-in customer
+      security:
+        - CustomerAccount: []
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppointmentUpdateInput"
+      responses:
+        "200":
+          description: Rescheduled appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "400":
+          description: Invalid or unavailable appointment time
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Appointment ownership required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Appointment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: cancelAppointment
+      tags: [salon]
+      summary: Cancel an appointment owned by the signed-in customer
+      security:
+        - CustomerAccount: []
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cancelled appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Appointment ownership required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Appointment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /manager/appointments:
+    get:
+      operationId: listManagerAppointments
+      tags: [salon]
+      summary: List all salon appointments for managers
+      security:
+        - SalonManager: []
+      responses:
+        "200":
+          description: All salon appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Appointment"
+  /manager/customers:
+    get:
+      operationId: listManagerCustomers
+      tags: [salon]
+      summary: List unique salon customers for managers
+      security:
+        - SalonManager: []
+      responses:
+        "200":
+          description: Unique salon customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Customer"
   /salon-summary:
     get:
       operationId: getSalonSummary
@@ -872,6 +991,41 @@ components:
         - phone
         - date
         - time
+    AppointmentUpdateInput:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+      required:
+        - date
+        - time
+    Customer:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        customerName:
+          type: string
+        phone:
+          type: string
+        appointmentCount:
+          type: integer
+        upcomingAppointmentCount:
+          type: integer
+        lastVisit:
+          type: ["string", "null"]
+          format: date
+      required:
+        - email
+        - customerName
+        - phone
+        - appointmentCount
+        - upcomingAppointmentCount
+        - lastVisit
     SalonSummary:
       type: object
       properties:
@@ -903,3 +1057,6 @@ components:
       type: apiKey
       in: header
       name: X-Salon-Manager
+    CustomerAccount:
+      type: http
+      scheme: bearer

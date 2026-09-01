@@ -8,7 +8,9 @@
 
 export * from './appointment';
 export * from './appointmentInput';
+export * from './appointmentUpdateInput';
 export * from './availability';
+export * from './customer';
 export * from './errorResponse';
 export * from './getAvailabilityParams';
 export * from './healthStatus';

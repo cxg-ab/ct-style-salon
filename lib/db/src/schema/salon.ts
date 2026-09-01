@@ -56,6 +56,7 @@ export const appointmentsTable = pgTable("salon_appointments", {
   customerName: text("customer_name").notNull(),
   email: text("email").notNull(),
   phone: text("phone").notNull(),
+  clerkUserId: text("clerk_user_id"),
   date: text("date").notNull(),
   time: text("time").notNull(),
   notes: text("notes"),

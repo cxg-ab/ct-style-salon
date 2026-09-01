@@ -30,8 +30,11 @@ import {
   getGetAvailabilityQueryKey,
   getGetSalonSummaryQueryKey,
   getListAppointmentsQueryKey,
+  getListManagerAppointmentsQueryKey,
+  getListManagerCustomersQueryKey,
   getListServicesQueryKey,
   getListStylistsQueryKey,
+  useCancelAppointment,
   useCreateStylist,
   useCreateAppointment,
   useCreateService,
@@ -39,10 +42,13 @@ import {
   useGetSalonSummary,
   useHealthCheck,
   useListAppointments,
+  useListManagerAppointments,
+  useListManagerCustomers,
   useListServices,
   useListStylists,
   useDeleteService,
   useDeleteStylist,
+  useUpdateAppointment,
   useUpdateService,
   useUpdateStylist,
   useUpdateStylistSchedule,
@@ -128,6 +134,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { locale, setLocale, t } = useLocale();
+  const { isSignedIn } = useAuth();
+  const { user } = useUser();
   const links = [
     { href: '/', label: t('theSalon'), testId: 'salon' },
     { href: '/book', label: t('bookVisit'), testId: 'book' },
@@ -167,6 +175,9 @@ function Shell({ children }: { children: React.ReactNode }) {
              <Link href="/book" className="hidden items-center gap-2 rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.12em] text-[hsl(var(--primary-foreground))] shadow-[0_8px_22px_hsl(var(--primary)/.18)] transition-all hover:-translate-y-0.5 hover:bg-[hsl(16_61%_48%)] md:flex" data-testid="link-header-book">
                {t('reserveChair')} <ArrowRight size={14} />
              </Link>
+            <Link href={isSignedIn ? '/appointments' : '/sign-in'} className="hidden items-center gap-2 rounded-full border border-[hsl(var(--border))] px-3 py-2.5 text-[11px] font-bold text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))] md:flex" data-testid={isSignedIn ? 'link-header-account' : 'link-header-sign-in'}>
+              <UserRound size={14} /> {isSignedIn ? (user?.firstName || t('myAccount')) : t('signIn')}
+            </Link>
            </div>
            <button className="rounded-full p-2 text-[hsl(var(--foreground))] md:hidden" onClick={() => setMobileOpen(!mobileOpen)} aria-label={mobileOpen ? t('closeMenu') : t('openMenu')} data-testid="button-mobile-menu">
             {mobileOpen ? <X size={22} /> : <Menu size={22} />}
@@ -179,6 +190,9 @@ function Shell({ children }: { children: React.ReactNode }) {
                  {link.label} <ArrowRight size={15} className="text-[hsl(var(--primary))]" />
               </Link>
             ))}
+            <Link href={isSignedIn ? '/appointments' : '/sign-in'} onClick={() => setMobileOpen(false)} className="flex items-center justify-between border-b border-[hsl(var(--border)/.55)] py-4 text-sm font-semibold" data-testid="link-mobile-account">
+              <span className="flex items-center gap-2"><UserRound size={15} /> {isSignedIn ? t('myAccount') : t('signIn')}</span><ArrowRight size={15} className="text-[hsl(var(--primary))]" />
+            </Link>
              <div className="flex items-center justify-between pt-4 text-xs font-semibold">
                  <span>{t('language')}</span>
                <div className="flex items-center gap-2">
@@ -904,6 +918,55 @@ function EmployeeCard({
   );
 }
 
+function ManagerCustomers() {
+  const { t, formatDate } = useLocale();
+  const customersQuery = useListManagerCustomers({ query: { queryKey: getListManagerCustomersQueryKey() } });
+  const customers = customersQuery.data ?? [];
+
+  return (
+    <section className="mt-0 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-4 sm:p-5" data-testid="customer-management">
+      <div className="border-b border-[hsl(var(--border))] pb-4">
+        <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('customerList')}</p>
+        <h2 className="mt-1 font-display text-3xl">{t('customers')}</h2>
+        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('customerIntro')}</p>
+      </div>
+      <div className="mt-4 space-y-3">
+        {customersQuery.isLoading ? <LoadingCards count={2} /> : customersQuery.isError ? <ErrorMessage retry={() => customersQuery.refetch()} /> : customers.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noCustomers')}</div> : customers.map((customer) => (
+          <article key={customer.email} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`customer-manager-card-${customer.email}`}>
+            <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--primary))]"><UserRound size={16} /></span><div className="min-w-0"><h3 className="truncate font-semibold">{customer.customerName}</h3><p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{customer.email}</p><p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{customer.phone}</p></div></div>
+            <div className="mt-4 flex flex-wrap gap-3 border-t border-[hsl(var(--border))] pt-3 font-mono-ui text-[10px] uppercase tracking-[.08em] text-[hsl(var(--muted-foreground))]"><span>{customer.appointmentCount} {t('visits')}</span><span>{customer.upcomingAppointmentCount} {t('upcoming')}</span>{customer.lastVisit && <span>{t('lastVisit')} {formatDate(customer.lastVisit, { month: 'short', day: 'numeric' })}</span>}</div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ManagerAppointments() {
+  const { t, formatDate, formatPrice, statusLabel, translateServiceName } = useLocale();
+  const appointmentsQuery = useListManagerAppointments({ query: { queryKey: getListManagerAppointmentsQueryKey() } });
+  const appointments = appointmentsQuery.data ?? [];
+
+  return (
+    <section className="mt-0 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-4 sm:p-5" data-testid="appointment-management">
+      <div className="border-b border-[hsl(var(--border))] pb-4">
+        <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('appointmentList')}</p>
+        <h2 className="mt-1 font-display text-3xl">{t('appointments')}</h2>
+        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('appointmentIntro')}</p>
+      </div>
+      <div className="mt-4 space-y-3">
+        {appointmentsQuery.isLoading ? <LoadingCards count={2} /> : appointmentsQuery.isError ? <ErrorMessage retry={() => appointmentsQuery.refetch()} /> : appointments.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noAppointments')}</div> : appointments.map((appointment) => (
+          <article key={appointment.id} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4" data-testid={`appointment-manager-card-${appointment.id}`}>
+            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate font-semibold">{appointment.customerName}</h3><p className="mt-1 truncate text-xs text-[hsl(var(--muted-foreground))]">{appointment.email}</p></div><span className="shrink-0 rounded-full bg-[hsl(var(--accent)/.35)] px-2 py-1 font-mono-ui text-[9px] uppercase tracking-[.08em]">{statusLabel(appointment.status)}</span></div>
+            <p className="mt-4 font-display text-xl">{appointment.serviceNames.map(translateServiceName).join(' · ')}</p>
+            <div className="mt-3 flex flex-wrap gap-3 text-xs text-[hsl(var(--muted-foreground))]"><span className="flex items-center gap-1.5"><CalendarDays size={14} className="text-[hsl(var(--primary))]" />{formatDate(appointment.date, { month: 'short', day: 'numeric' })}</span><span className="flex items-center gap-1.5"><Clock3 size={14} className="text-[hsl(var(--primary))]" />{appointment.time}</span><span>{appointment.stylistName}</span><span>{formatPrice(appointment.totalPrice)}</span></div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ManagerSchedule() {
   const { t } = useLocale();
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
@@ -953,8 +1016,9 @@ function ManagerSchedule() {
            {t('signOut')}
         </button>
       </div>
+      <div className="manager-masonry mt-8" data-testid="manager-masonry">
       <ServiceManagement />
-       <section className="mt-8 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-4 sm:p-5" data-testid="employee-management">
+       <section className="mt-0 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background)/.42)] p-4 sm:p-5" data-testid="employee-management">
          <div className="flex flex-col justify-between gap-3 border-b border-[hsl(var(--border))] pb-4 sm:flex-row sm:items-center">
            <button type="button" onClick={() => setRosterExpanded((current) => !current)} aria-expanded={rosterExpanded} aria-controls="employee-roster-details" className="min-w-0 text-left">
              <p className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-[hsl(var(--primary))]">{t('employeeRoster')}</p>
@@ -983,18 +1047,22 @@ function ManagerSchedule() {
         </div>
          </div>
       </section>
+      <ManagerCustomers />
+      <ManagerAppointments />
+      </div>
     </main>
   );
 }
 
 function DateStrip({ date, onChange }: { date: string; onChange: (date: string) => void }) {
   const { weekday, formatDate } = useLocale();
-  const days = useMemo(() => Array.from({ length: 10 }, (_, index) => { const value = new Date(); value.setHours(12, 0, 0, 0); value.setDate(value.getDate() + index); return value; }), []);
+  const days = useMemo(() => Array.from({ length: 6 }, (_, index) => { const value = new Date(); value.setHours(12, 0, 0, 0); value.setDate(value.getDate() + index); return value; }), []);
   return <div className="flex gap-2 overflow-x-auto pb-2" data-testid="date-strip">{days.map((day) => { const iso = day.toISOString().slice(0, 10); const selected = iso === date; return <button key={iso} onClick={() => onChange(iso)} className={`min-w-[68px] rounded-xl border px-2 py-3 text-center transition-all ${selected ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[0_8px_18px_hsl(var(--primary)/.18)]' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/.55)]'}`} data-testid={`button-date-${iso}`}><span className="block font-mono-ui text-[9px] uppercase tracking-[.08em] opacity-70">{weekday(day)}</span><span className="mt-1 block text-xl font-semibold">{day.getDate()}</span><span className="block text-[9px] uppercase opacity-60">{formatDate(day, { month: 'short' })}</span></button>; })}</div>;
 }
 
 function Book() {
   const { t, formatPrice, formatDate, serviceCopy, stylistCopy } = useLocale();
+  const { user } = useUser();
   const [step, setStep] = useState(1);
   const [stylistId, setStylistId] = useState<number>();
   const [serviceIds, setServiceIds] = useState<number[]>([]);
@@ -1016,6 +1084,17 @@ function Book() {
   const slots = availabilityQuery.data?.[0]?.slots ?? [];
   const totalDurationMinutes = selectedServices.reduce((total, service) => total + service.durationMinutes, 0);
   const totalPrice = selectedServices.reduce((total, service) => total + Number(service.price), 0);
+
+  useEffect(() => {
+    if (!user) return;
+    const accountName = [user.firstName, user.lastName].filter(Boolean).join(' ');
+    const accountEmail = user.primaryEmailAddress?.emailAddress ?? '';
+    setForm((current) => ({
+      ...current,
+      customerName: current.customerName || accountName,
+      email: current.email || accountEmail,
+    }));
+  }, [user?.id]);
 
   const canNext = (step === 1 && Boolean(stylistId)) || (step === 2 && serviceIds.length > 0) || (step === 3 && Boolean(time)) || step === 4;
   const updateField = (field: string, value: string) => setForm((current) => ({ ...current, [field]: value }));
@@ -1060,13 +1139,136 @@ function Confirmation({ appointment }: { appointment: Appointment }) {
   return <main className="mx-auto flex min-h-[calc(100dvh-76px)] max-w-[760px] items-center px-5 py-16 sm:px-8"><div className="w-full rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 text-center shadow-[0_24px_70px_hsl(var(--secondary)/.08)] sm:p-14"><span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-[hsl(var(--accent))] text-[hsl(var(--secondary))]"><Check size={28} /></span><p className="mt-8 font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('inTheBooks')}</p><h1 className="mt-4 font-display text-6xl leading-[.85] sm:text-8xl">{t('seeYouSoon')}</h1><p className="mx-auto mt-7 max-w-md text-base leading-7 text-[hsl(var(--muted-foreground))]">{t('confirmationInbox')} {appointment.email}. {t('confirmationSent')}</p><div className="mx-auto mt-10 max-w-md rounded-2xl bg-[hsl(var(--muted)/.75)] p-5 text-left"><div className="flex justify-between gap-4 border-b border-[hsl(var(--border))] pb-4"><div className="space-y-1">{appointment.serviceNames.map((name) => <p key={name} className="font-display text-2xl">{translateServiceName(name)}</p>)}</div><span className="font-mono-ui text-[10px] text-[hsl(var(--primary))]">{statusLabel(appointment.status)}</span></div><div className="grid gap-3 border-b border-[hsl(var(--border))] py-4 text-sm"><span>{t('totalDuration')}: {appointment.totalDurationMinutes} {t('minutes')}</span><span>{t('totalPrice')}: {formatPrice(appointment.totalPrice)}</span></div><div className="grid gap-4 pt-4 text-sm sm:grid-cols-2"><span className="flex items-center gap-2"><CalendarDays size={15} className="text-[hsl(var(--primary))]" />{formatDate(appointment.date, { weekday: 'short', month: 'short', day: 'numeric' })}</span><span className="flex items-center gap-2"><Clock3 size={15} className="text-[hsl(var(--primary))]" />{appointment.time}</span><span className="flex items-center gap-2"><UserRound size={15} className="text-[hsl(var(--primary))]" />{appointment.stylistName}</span></div></div><Link href="/appointments" className="mt-8 inline-flex items-center gap-2 text-xs font-bold tracking-[.1em] text-[hsl(var(--primary))]" data-testid="link-view-appointments">{t('viewAppointments')} <ArrowRight size={15} /></Link></div></main>;
 }
 
+function localIsoDate(date: Date | string) {
+  if (typeof date === 'string') return date.slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function AccountAppointments() {
+  const { t, formatDate, translateServiceName, statusLabel, formatPrice } = useLocale();
+  const { isLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
+  const { signOut } = useClerk();
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDate, setEditDate] = useState('');
+  const [editTime, setEditTime] = useState('');
+  const [feedback, setFeedback] = useState<string>();
+  const params = useMemo(() => ({ email: undefined as string | undefined }), []);
+  const appointmentsQuery = useListAppointments(params, {
+    query: {
+      enabled: Boolean(isLoaded && isSignedIn),
+      queryKey: getListAppointmentsQueryKey(params),
+    },
+  });
+  const appointments = appointmentsQuery.data ?? [];
+  const editingAppointment = appointments.find((appointment) => appointment.id === editingId);
+  const availabilityParams = useMemo(() => ({
+    date: editDate,
+    stylistId: editingAppointment?.stylistId ?? 0,
+    serviceIds: editingAppointment?.serviceIds ?? [],
+  }), [editDate, editingAppointment?.stylistId, editingAppointment?.serviceIds]);
+  const availabilityQuery = useGetAvailability(availabilityParams, {
+    query: {
+      enabled: Boolean(editingAppointment && editDate && editingAppointment.status !== 'cancelled'),
+      queryKey: getGetAvailabilityQueryKey(availabilityParams),
+    },
+  });
+  const updateAppointment = useUpdateAppointment();
+  const cancelAppointment = useCancelAppointment();
+  const today = new Date();
+  const minDate = localIsoDate(today);
+  const maxDateValue = new Date(today);
+  maxDateValue.setDate(maxDateValue.getDate() + 5);
+  const maxDate = localIsoDate(maxDateValue);
+  const accountName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || t('myAccount');
+  const accountEmail = user?.primaryEmailAddress?.emailAddress ?? '';
+
+  const openEditor = (appointment: Appointment) => {
+    setEditingId(appointment.id);
+    setEditDate(localIsoDate(appointment.date));
+    setEditTime(appointment.time);
+    setFeedback(undefined);
+  };
+  const saveReschedule = () => {
+    if (!editingAppointment || !editDate || !editTime) return;
+    setFeedback(undefined);
+    updateAppointment.mutate(
+      { appointmentId: editingAppointment.id, data: { date: editDate, time: editTime } },
+      {
+        onSuccess: () => {
+          setEditingId(null);
+          setFeedback(t('appointmentChanged'));
+          queryClient.invalidateQueries({ queryKey: getListAppointmentsQueryKey(params) });
+        },
+        onError: (error) => {
+          setFeedback(scheduleErrorMessage(error, t('appointmentChangeError'), {}));
+        },
+      },
+    );
+  };
+  const cancel = (appointment: Appointment) => {
+    if (!window.confirm(`${t('cancelAppointmentConfirm')} ${formatDate(appointment.date, { month: 'short', day: 'numeric' })}?`)) return;
+    setFeedback(undefined);
+    cancelAppointment.mutate(
+      { appointmentId: appointment.id },
+      {
+        onSuccess: () => {
+          setEditingId(null);
+          setFeedback(t('appointmentCancelled'));
+          queryClient.invalidateQueries({ queryKey: getListAppointmentsQueryKey(params) });
+        },
+        onError: (error) => {
+          setFeedback(scheduleErrorMessage(error, t('appointmentCancelError'), {}));
+        },
+      },
+    );
+  };
+
+  return (
+    <main className="mx-auto max-w-[1000px] px-5 py-14 sm:px-8 md:py-24">
+      <div className="flex flex-col justify-between gap-7 sm:flex-row sm:items-end">
+        <div className="max-w-2xl reveal">
+          <p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('myAccount')}</p>
+          <h1 className="mt-4 font-display text-6xl leading-[.84] sm:text-8xl">{t('yourVisits')}</h1>
+          <p className="mt-7 max-w-md text-base leading-7 text-[hsl(var(--muted-foreground))]">{t('accountIntro')}</p>
+        </div>
+        <div className="flex items-center gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--primary))]"><UserRound size={17} /></span>
+          <div className="min-w-0"><p className="truncate text-sm font-semibold">{accountName}</p><p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{accountEmail}</p></div>
+        </div>
+      </div>
+      {feedback && <p className="mt-8 rounded-xl border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)] p-4 text-sm text-[hsl(var(--primary))]" role="status" data-testid="status-appointment-account">{feedback}</p>}
+      <section className="mt-12" data-testid="account-appointments">
+        {appointmentsQuery.isLoading ? <div className="space-y-3"><div className="skeleton h-32 rounded-2xl" /><div className="skeleton h-32 rounded-2xl" /></div> : appointmentsQuery.isError ? <ErrorMessage retry={() => appointmentsQuery.refetch()} /> : appointments.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-12 text-center" data-testid="empty-account-appointments"><CalendarDays className="mx-auto text-[hsl(var(--primary))]" size={25} /><p className="mt-4 font-display text-2xl">{t('nothingBooked')}</p><p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{t('accountEmpty')}</p><Link href="/book" className="mt-5 inline-flex items-center gap-2 text-xs font-bold text-[hsl(var(--primary))]" data-testid="link-account-book">{t('bookAVisit')} <ArrowRight size={14} /></Link></div> : <div className="space-y-4">{appointments.map((appointment) => {
+          const canManage = appointment.status !== 'cancelled' && appointment.date >= minDate;
+          const isEditing = editingId === appointment.id;
+          return <article key={appointment.id} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-6" data-testid={`card-account-appointment-${appointment.id}`}>
+            <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
+              <div className="flex items-start gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[hsl(var(--muted))] text-[hsl(var(--primary))]"><Scissors size={18} /></div><div><div className="flex flex-wrap items-center gap-3"><div className="space-y-1">{appointment.serviceNames.map((name) => <h2 key={name} className="font-display text-2xl">{translateServiceName(name)}</h2>)}</div><span className="rounded-full bg-[hsl(var(--accent)/.35)] px-2 py-1 font-mono-ui text-[9px] uppercase tracking-[.08em]">{statusLabel(appointment.status)}</span></div><p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{appointment.stylistName}</p><p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{appointment.totalDurationMinutes} {t('minutes')} · {formatPrice(appointment.totalPrice)}</p></div></div>
+              <div className="flex flex-wrap items-center gap-4 text-sm"><span className="flex items-center gap-2"><CalendarDays size={15} className="text-[hsl(var(--primary))]" />{formatDate(appointment.date, { month: 'short', day: 'numeric' })}</span><span className="flex items-center gap-2"><Clock3 size={15} className="text-[hsl(var(--primary))]" />{appointment.time}</span></div>
+            </div>
+            {canManage && <div className="mt-5 flex flex-wrap gap-2 border-t border-[hsl(var(--border))] pt-4"><button type="button" onClick={() => isEditing ? setEditingId(null) : openEditor(appointment)} className="rounded-full border border-[hsl(var(--border))] px-4 py-2.5 text-[11px] font-bold tracking-[.08em] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid={`button-edit-appointment-${appointment.id}`}>{isEditing ? t('closeEditor') : t('changeAppointment')}</button><button type="button" onClick={() => cancel(appointment)} disabled={cancelAppointment.isPending} className="rounded-full border border-[hsl(var(--destructive)/.35)] px-4 py-2.5 text-[11px] font-bold tracking-[.08em] text-[hsl(var(--destructive))] disabled:opacity-60" data-testid={`button-cancel-appointment-${appointment.id}`}>{t('cancelAppointment')}</button></div>}
+            {isEditing && <div className="mt-4 rounded-2xl bg-[hsl(var(--muted)/.55)] p-4" data-testid={`appointment-editor-${appointment.id}`}><p className="text-sm font-semibold">{t('changeAppointment')}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{t('accountChangeHint')}</p><div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]"><label className="text-[10px] font-bold uppercase tracking-[.1em]">{t('dateTime')}<input type="date" min={minDate} max={maxDate} value={editDate} onChange={(event) => { setEditDate(event.target.value); setEditTime(''); }} className="mt-2 h-11 w-full rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal normal-case tracking-normal" data-testid={`input-reschedule-date-${appointment.id}`} /></label><label className="text-[10px] font-bold uppercase tracking-[.1em]">{t('findTime')}<select value={editTime} onChange={(event) => setEditTime(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 text-sm font-normal normal-case tracking-normal" data-testid={`select-reschedule-time-${appointment.id}`}><option value="">{availabilityQuery.isLoading ? t('loadingTimes') : t('chooseTime')}</option>{(availabilityQuery.data?.[0]?.slots ?? []).map((slot) => <option key={slot} value={slot}>{slot}</option>)}</select></label><button type="button" onClick={saveReschedule} disabled={!editTime || updateAppointment.isPending} className="self-end rounded-full bg-[hsl(var(--primary))] px-5 py-3 text-[11px] font-bold tracking-[.08em] text-[hsl(var(--primary-foreground))] disabled:opacity-50" data-testid={`button-save-reschedule-${appointment.id}`}>{updateAppointment.isPending ? t('saving') : t('saveChanges')}</button></div></div>}
+          </article>;
+        })}</div>}
+      </section>
+      <button type="button" onClick={() => signOut({ redirectUrl: basePath || '/' })} className="mt-10 rounded-full border border-[hsl(var(--border))] px-4 py-3 text-[11px] font-bold tracking-[.1em] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]" data-testid="button-account-sign-out">{t('signOut')}</button>
+    </main>
+  );
+}
+
 function Appointments() {
   const { t, formatDate, translateServiceName, statusLabel, formatPrice } = useLocale();
+  const { isSignedIn } = useAuth();
   const [email, setEmail] = useState('');
   const [submittedEmail, setSubmittedEmail] = useState('');
   const params = useMemo(() => ({ email: submittedEmail }), [submittedEmail]);
   const appointmentsQuery = useListAppointments(params, { query: { enabled: Boolean(submittedEmail), queryKey: getListAppointmentsQueryKey(params) } });
   const appointments = appointmentsQuery.data ?? [];
+  if (isSignedIn) return <AccountAppointments />;
     return <main className="mx-auto max-w-[1000px] px-5 py-14 sm:px-8 md:py-24"><div className="max-w-2xl reveal"><p className="font-mono-ui text-[10px] uppercase tracking-[.24em] text-[hsl(var(--primary))]">{t('yourVisits')}</p><h1 className="mt-4 font-display text-6xl leading-[.84] sm:text-8xl">{t('goodTimes')}</h1><p className="mt-7 max-w-md text-base leading-7 text-[hsl(var(--muted-foreground))]">{t('lookupIntro')}</p></div><form onSubmit={(event) => { event.preventDefault(); setSubmittedEmail(email.trim()); }} className="mt-12 flex max-w-xl flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Mail size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[hsl(var(--primary))]" /><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t('lookupPlaceholder')} className="h-14 w-full rounded-full border border-[hsl(var(--input))] bg-[hsl(var(--card))] pl-11 pr-5 text-sm" data-testid="input-lookup-email" /></div><button type="submit" className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-[hsl(var(--primary))] px-7 text-xs font-bold tracking-[.1em] text-[hsl(var(--primary-foreground))]" data-testid="button-lookup-appointments"><Search size={15} /> {t('findVisits')}</button></form>{submittedEmail && <section className="mt-16 reveal"><div className="mb-6 flex items-center justify-between"><h2 className="font-display text-4xl">{t('appointments')}</h2><span className="font-mono-ui text-[10px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{submittedEmail}</span></div>{appointmentsQuery.isLoading ? <div className="space-y-3"><div className="skeleton h-28 rounded-2xl" /><div className="skeleton h-28 rounded-2xl" /></div> : appointmentsQuery.isError ? <ErrorMessage retry={() => appointmentsQuery.refetch()} /> : appointments.length === 0 ? <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-12 text-center" data-testid="empty-appointments"><CalendarDays className="mx-auto text-[hsl(var(--primary))]" size={25} /><p className="mt-4 font-display text-2xl">{t('nothingBooked')}</p><p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{t('readyHere')}</p><Link href="/book" className="mt-5 inline-flex items-center gap-2 text-xs font-bold text-[hsl(var(--primary))]" data-testid="link-empty-book">{t('bookAVisit')} <ArrowRight size={14} /></Link></div> : <div className="space-y-3">{appointments.map((appointment) => <div key={appointment.id} className="flex flex-col justify-between gap-5 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:flex-row sm:items-center sm:p-6" data-testid={`card-appointment-${appointment.id}`}><div className="flex items-start gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[hsl(var(--muted))] text-[hsl(var(--primary))]"><Scissors size={18} /></div><div><div className="flex flex-wrap items-center gap-3"><div className="space-y-1">{appointment.serviceNames.map((name) => <h3 key={name} className="font-display text-2xl">{translateServiceName(name)}</h3>)}</div><span className="rounded-full bg-[hsl(var(--accent)/.35)] px-2 py-1 font-mono-ui text-[9px] uppercase tracking-[.08em]">{statusLabel(appointment.status)}</span></div><p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">{appointment.stylistName}</p><p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{appointment.totalDurationMinutes} {t('minutes')} · {formatPrice(appointment.totalPrice)}</p></div></div><div className="flex items-center gap-5 border-t border-[hsl(var(--border)/.7)] pt-4 text-sm sm:border-t-0 sm:pt-0"><span className="flex items-center gap-2"><CalendarDays size={15} className="text-[hsl(var(--primary))]" />{formatDate(appointment.date, { month: 'short', day: 'numeric' })}</span><span className="flex items-center gap-2"><Clock3 size={15} className="text-[hsl(var(--primary))]" />{appointment.time}</span></div></div>)}</div>}</section>}</main>;
 }
 

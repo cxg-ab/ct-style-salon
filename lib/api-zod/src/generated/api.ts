@@ -457,10 +457,10 @@ export const GetAvailabilityResponse = zod.array(GetAvailabilityResponseItem)
 
 
 /**
- * @summary List appointments for a guest email
+ * @summary List the signed-in customer's appointments or guest appointments by email
  */
 export const ListAppointmentsQueryParams = zod.object({
-  "email": zod.email()
+  "email": zod.email().optional()
 })
 
 
@@ -542,6 +542,127 @@ export const CreateAppointmentResponse = zod.object({
   "status": zod.string(),
   "createdAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary Reschedule an appointment owned by the signed-in customer
+ */
+export const UpdateAppointmentParams = zod.object({
+  "appointmentId": zod.coerce.number().int()
+})
+
+export const UpdateAppointmentBody = zod.object({
+  "date": zod.coerce.date(),
+  "time": zod.string()
+})
+
+
+
+
+export const updateAppointmentResponseTotalPriceMin = 0;
+
+
+
+export const UpdateAppointmentResponse = zod.object({
+  "id": zod.int(),
+  "serviceId": zod.int().describe('First service in the bundle, retained for backwards compatibility.'),
+  "serviceIds": zod.array(zod.int()).min(1),
+  "serviceNames": zod.array(zod.string()).min(1),
+  "serviceName": zod.string().describe('Comma-separated service names, retained for backwards compatibility.'),
+  "totalDurationMinutes": zod.int().min(1),
+  "totalPrice": zod.number().min(updateAppointmentResponseTotalPriceMin),
+  "stylistId": zod.int(),
+  "stylistName": zod.string(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "date": zod.coerce.date(),
+  "time": zod.string(),
+  "notes": zod.string().nullable(),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Cancel an appointment owned by the signed-in customer
+ */
+export const CancelAppointmentParams = zod.object({
+  "appointmentId": zod.coerce.number().int()
+})
+
+
+
+
+export const cancelAppointmentResponseTotalPriceMin = 0;
+
+
+
+export const CancelAppointmentResponse = zod.object({
+  "id": zod.int(),
+  "serviceId": zod.int().describe('First service in the bundle, retained for backwards compatibility.'),
+  "serviceIds": zod.array(zod.int()).min(1),
+  "serviceNames": zod.array(zod.string()).min(1),
+  "serviceName": zod.string().describe('Comma-separated service names, retained for backwards compatibility.'),
+  "totalDurationMinutes": zod.int().min(1),
+  "totalPrice": zod.number().min(cancelAppointmentResponseTotalPriceMin),
+  "stylistId": zod.int(),
+  "stylistName": zod.string(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "date": zod.coerce.date(),
+  "time": zod.string(),
+  "notes": zod.string().nullable(),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List all salon appointments for managers
+ */
+
+
+
+export const listManagerAppointmentsResponseTotalPriceMin = 0;
+
+
+
+export const ListManagerAppointmentsResponseItem = zod.object({
+  "id": zod.int(),
+  "serviceId": zod.int().describe('First service in the bundle, retained for backwards compatibility.'),
+  "serviceIds": zod.array(zod.int()).min(1),
+  "serviceNames": zod.array(zod.string()).min(1),
+  "serviceName": zod.string().describe('Comma-separated service names, retained for backwards compatibility.'),
+  "totalDurationMinutes": zod.int().min(1),
+  "totalPrice": zod.number().min(listManagerAppointmentsResponseTotalPriceMin),
+  "stylistId": zod.int(),
+  "stylistName": zod.string(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "date": zod.coerce.date(),
+  "time": zod.string(),
+  "notes": zod.string().nullable(),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListManagerAppointmentsResponse = zod.array(ListManagerAppointmentsResponseItem)
+
+
+/**
+ * @summary List unique salon customers for managers
+ */
+export const ListManagerCustomersResponseItem = zod.object({
+  "email": zod.email(),
+  "customerName": zod.string(),
+  "phone": zod.string(),
+  "appointmentCount": zod.int(),
+  "upcomingAppointmentCount": zod.int(),
+  "lastVisit": zod.coerce.date().nullable()
+})
+export const ListManagerCustomersResponse = zod.array(ListManagerCustomersResponseItem)
 
 
 /**

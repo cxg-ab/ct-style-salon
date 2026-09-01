@@ -184,6 +184,21 @@ export interface AppointmentInput {
   notes?: string | null;
 }
 
+export interface AppointmentUpdateInput {
+  date: string;
+  time: string;
+}
+
+export interface Customer {
+  email: string;
+  customerName: string;
+  phone: string;
+  appointmentCount: number;
+  upcomingAppointmentCount: number;
+  /** @nullable */
+  lastVisit: string | null;
+}
+
 export interface SalonSummary {
   rating: number;
   reviewCount: number;
@@ -208,6 +223,6 @@ serviceIds: number[];
 };
 
 export type ListAppointmentsParams = {
-email: string;
+email?: string;
 };
 

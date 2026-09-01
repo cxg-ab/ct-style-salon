@@ -13,10 +13,15 @@ import {
   GetAvailabilityQueryParams,
   GetAvailabilityResponse,
   GetSalonSummaryResponse,
+  ListManagerAppointmentsResponse,
+  ListManagerCustomersResponse,
   ListAppointmentsQueryParams,
   ListAppointmentsResponse,
   ListServicesResponse,
   ListStylistsResponse,
+  UpdateAppointmentBody,
+  UpdateAppointmentParams,
+  UpdateAppointmentResponse,
   UpdateServiceBody,
   UpdateServiceParams,
   UpdateServiceResponse,
@@ -41,6 +46,7 @@ import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
+const MAX_BOOKING_DAYS_AHEAD = 5;
 type BookedAppointment = {
   time: string;
   durationMinutes: number;
@@ -154,6 +160,15 @@ type AuthenticatedRequest = Request & {
   salonManagerId?: string;
 };
 
+async function requireCustomerAccount(req: Request, res: Response): Promise<string | undefined> {
+  const userId = getAuth(req)?.userId;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to manage appointments in your account." });
+    return undefined;
+  }
+  return userId;
+}
+
 export async function requireSalonManager(req: AuthenticatedRequest, res: Response): Promise<boolean> {
   const auth = getAuth(req);
   const userId = auth?.userId;
@@ -218,6 +233,7 @@ function appointmentResponse(
   serviceRows: Array<typeof servicesTable.$inferSelect>,
   stylistName: string,
 ) {
+  const { clerkUserId: _clerkUserId, ...publicRow } = row;
   const serviceIds = row.serviceIds.length > 0 ? row.serviceIds : [row.serviceId];
   const servicesById = new Map(serviceRows.map((service) => [service.id, service]));
   const selectedServices = serviceIds
@@ -234,7 +250,7 @@ function appointmentResponse(
   );
 
   return {
-    ...row,
+    ...publicRow,
     serviceId: serviceIds[0],
     serviceIds,
     serviceName: serviceNames.join(", "),
@@ -244,6 +260,32 @@ function appointmentResponse(
     stylistName,
     date: new Date(`${row.date}T00:00:00.000Z`),
   };
+}
+
+function isWithinBookingWindow(date: Date): boolean {
+  const today = new Date();
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const requestedUtc = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const daysAhead = Math.round((requestedUtc - todayUtc) / (24 * 60 * 60 * 1000));
+  return daysAhead >= 0 && daysAhead <= MAX_BOOKING_DAYS_AHEAD;
+}
+
+async function serializeAppointments(
+  rows: Array<{ appointment: typeof appointmentsTable.$inferSelect; stylistName: string }>,
+) {
+  return Promise.all(
+    rows.map(async ({ appointment, stylistName }) => {
+      const serviceIds =
+        appointment.serviceIds.length > 0
+          ? appointment.serviceIds
+          : [appointment.serviceId];
+      const serviceRows = await db
+        .select()
+        .from(servicesTable)
+        .where(inArray(servicesTable.id, serviceIds));
+      return appointmentResponse(appointment, serviceRows, stylistName);
+    }),
+  );
 }
 
 function parseServiceIds(value: unknown): number[] {
@@ -725,6 +767,10 @@ router.get("/availability", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Choose a valid appointment date." });
     return;
   }
+  if (process.env.NODE_ENV !== "test" && !isWithinBookingWindow(parsed.data.date)) {
+    res.status(400).json({ error: "Availability can only be checked within the next five days." });
+    return;
+  }
 
   const date = String(req.query.date);
   const stylistRows = await db
@@ -765,7 +811,12 @@ router.get("/availability", async (req, res): Promise<void> => {
     })
     .from(appointmentsTable)
     .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
-    .where(eq(appointmentsTable.date, date));
+    .where(
+      and(
+        eq(appointmentsTable.date, date),
+        ne(appointmentsTable.status, "cancelled"),
+      ),
+    );
   const bookedByStylist = new Map<number, BookedAppointment[]>();
   for (const appointment of booked) {
     const appointments = bookedByStylist.get(appointment.stylistId) ?? [];
@@ -807,6 +858,12 @@ router.get("/appointments", async (req, res): Promise<void> => {
     return;
   }
 
+  const userId = getAuth(req)?.userId;
+  if (!userId && !parsed.data.email) {
+    res.status(400).json({ error: "Sign in or enter the email used for your booking." });
+    return;
+  }
+
   const rows = await db
     .select({
       appointment: appointmentsTable,
@@ -814,26 +871,14 @@ router.get("/appointments", async (req, res): Promise<void> => {
     })
     .from(appointmentsTable)
     .innerJoin(stylistsTable, eq(appointmentsTable.stylistId, stylistsTable.id))
-    .where(eq(appointmentsTable.email, parsed.data.email.toLowerCase()))
+    .where(
+      userId
+        ? eq(appointmentsTable.clerkUserId, userId)
+        : eq(appointmentsTable.email, parsed.data.email!.toLowerCase()),
+    )
     .orderBy(desc(appointmentsTable.date), desc(appointmentsTable.time));
 
-  res.json(
-    ListAppointmentsResponse.parse(
-      await Promise.all(
-        rows.map(async ({ appointment, stylistName }) => {
-          const serviceIds =
-            appointment.serviceIds.length > 0
-              ? appointment.serviceIds
-              : [appointment.serviceId];
-          const serviceRows = await db
-            .select()
-            .from(servicesTable)
-            .where(inArray(servicesTable.id, serviceIds));
-          return appointmentResponse(appointment, serviceRows, stylistName);
-        }),
-      ),
-    ),
-  );
+  res.json(ListAppointmentsResponse.parse(await serializeAppointments(rows)));
 });
 
 router.post("/appointments", async (req, res): Promise<void> => {
@@ -848,6 +893,12 @@ router.post("/appointments", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Check your booking details and try again." });
     return;
   }
+  if (process.env.NODE_ENV !== "test" && !isWithinBookingWindow(body.data.date)) {
+    res.status(400).json({ error: "Appointments can only be booked within the next five days." });
+    return;
+  }
+
+  const clerkUserId = getAuth(req)?.userId ?? null;
 
   await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(${body.data.stylistId})`);
@@ -917,6 +968,7 @@ router.post("/appointments", async (req, res): Promise<void> => {
         and(
           eq(appointmentsTable.stylistId, body.data.stylistId),
           eq(appointmentsTable.date, date),
+          ne(appointmentsTable.status, "cancelled"),
         ),
       );
     const bookedAppointments = existingAppointments.map((appointment) => ({
@@ -943,6 +995,7 @@ router.post("/appointments", async (req, res): Promise<void> => {
         customerName: body.data.customerName,
         email: body.data.email.toLowerCase(),
         phone: body.data.phone,
+        clerkUserId,
         date,
         time: body.data.time,
         notes: body.data.notes ?? null,
@@ -956,6 +1009,232 @@ router.post("/appointments", async (req, res): Promise<void> => {
       ),
     );
   });
+});
+
+router.patch("/appointments/:appointmentId", async (req, res): Promise<void> => {
+  const userId = await requireCustomerAccount(req, res);
+  if (!userId) return;
+
+  await ensureSalonSeeded();
+  const params = UpdateAppointmentParams.safeParse(req.params);
+  const body = UpdateAppointmentBody.safeParse({
+    ...req.body,
+    date: toDate(req.body?.date),
+  });
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Choose a valid date and time." });
+    return;
+  }
+  if (!isWithinBookingWindow(body.data.date)) {
+    res.status(400).json({ error: "Appointments can only be moved within the next five days." });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({
+        appointment: appointmentsTable,
+        stylistName: stylistsTable.name,
+      })
+      .from(appointmentsTable)
+      .innerJoin(stylistsTable, eq(appointmentsTable.stylistId, stylistsTable.id))
+      .where(eq(appointmentsTable.id, params.data.appointmentId))
+      .limit(1);
+    if (!current) {
+      res.status(404).json({ error: "Appointment not found." });
+      return;
+    }
+    if (current.appointment.clerkUserId !== userId) {
+      res.status(403).json({ error: "You can only change appointments in your account." });
+      return;
+    }
+    if (current.appointment.status === "cancelled") {
+      res.status(400).json({ error: "Cancelled appointments cannot be rescheduled." });
+      return;
+    }
+
+    await tx.execute(sql`select pg_advisory_xact_lock(${current.appointment.stylistId})`);
+    const serviceIds =
+      current.appointment.serviceIds.length > 0
+        ? current.appointment.serviceIds
+        : [current.appointment.serviceId];
+    const serviceRows = await tx
+      .select()
+      .from(servicesTable)
+      .where(inArray(servicesTable.id, serviceIds));
+    const durationMinutes = serviceRows.reduce(
+      (total, service) => total + service.durationMinutes,
+      0,
+    );
+    if (serviceRows.length !== serviceIds.length || durationMinutes < 1) {
+      res.status(400).json({ error: "The services on this appointment are no longer available." });
+      return;
+    }
+
+    const schedule = (current.appointment.stylistId
+      ? (await tx
+          .select({ schedule: stylistsTable.schedule })
+          .from(stylistsTable)
+          .where(eq(stylistsTable.id, current.appointment.stylistId))
+          .limit(1))[0]?.schedule
+      : []) as StylistScheduleEntry[];
+    const weekday = body.data.date.getUTCDay();
+    if (!slotsForSchedule(schedule, weekday, durationMinutes).includes(body.data.time)) {
+      res.status(400).json({ error: "That employee is not scheduled for the selected time." });
+      return;
+    }
+
+    const date = body.data.date.toISOString().slice(0, 10);
+    const existingAppointments = await tx
+      .select({
+        id: appointmentsTable.id,
+        time: appointmentsTable.time,
+        durationMinutes: appointmentsTable.totalDurationMinutes,
+        legacyDurationMinutes: servicesTable.durationMinutes,
+      })
+      .from(appointmentsTable)
+      .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
+      .where(
+        and(
+          eq(appointmentsTable.stylistId, current.appointment.stylistId),
+          eq(appointmentsTable.date, date),
+          ne(appointmentsTable.id, current.appointment.id),
+          ne(appointmentsTable.status, "cancelled"),
+        ),
+      );
+    if (
+      existingAppointments.some((existingAppointment) =>
+        appointmentTimesOverlap(body.data.time, durationMinutes, {
+          time: existingAppointment.time,
+          durationMinutes:
+            existingAppointment.durationMinutes ?? existingAppointment.legacyDurationMinutes,
+        }),
+      )
+    ) {
+      res.status(400).json({ error: "That time is no longer available. Please choose another slot." });
+      return;
+    }
+
+    const [updated] = await tx
+      .update(appointmentsTable)
+      .set({ date, time: body.data.time })
+      .where(eq(appointmentsTable.id, current.appointment.id))
+      .returning();
+    res.json(
+      UpdateAppointmentResponse.parse(
+        appointmentResponse(updated, serviceRows, current.stylistName),
+      ),
+    );
+  });
+});
+
+router.delete("/appointments/:appointmentId", async (req, res): Promise<void> => {
+  const userId = await requireCustomerAccount(req, res);
+  if (!userId) return;
+
+  await ensureSalonSeeded();
+  const params = UpdateAppointmentParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Choose a valid appointment." });
+    return;
+  }
+
+  const [current] = await db
+    .select({
+      appointment: appointmentsTable,
+      stylistName: stylistsTable.name,
+    })
+    .from(appointmentsTable)
+    .innerJoin(stylistsTable, eq(appointmentsTable.stylistId, stylistsTable.id))
+    .where(eq(appointmentsTable.id, params.data.appointmentId))
+    .limit(1);
+  if (!current) {
+    res.status(404).json({ error: "Appointment not found." });
+    return;
+  }
+  if (current.appointment.clerkUserId !== userId) {
+    res.status(403).json({ error: "You can only cancel appointments in your account." });
+    return;
+  }
+
+  const [updated] = await db
+    .update(appointmentsTable)
+    .set({ status: "cancelled" })
+    .where(eq(appointmentsTable.id, current.appointment.id))
+    .returning();
+  const serviceIds =
+    current.appointment.serviceIds.length > 0
+      ? current.appointment.serviceIds
+      : [current.appointment.serviceId];
+  const serviceRows = await db
+    .select()
+    .from(servicesTable)
+    .where(inArray(servicesTable.id, serviceIds));
+  res.json(
+    UpdateAppointmentResponse.parse(
+      appointmentResponse(updated, serviceRows, current.stylistName),
+    ),
+  );
+});
+
+router.get("/manager/appointments", async (req, res): Promise<void> => {
+  if (!(await requireSalonManager(req, res))) return;
+  await ensureSalonSeeded();
+  const rows = await db
+    .select({
+      appointment: appointmentsTable,
+      stylistName: stylistsTable.name,
+    })
+    .from(appointmentsTable)
+    .innerJoin(stylistsTable, eq(appointmentsTable.stylistId, stylistsTable.id))
+    .orderBy(desc(appointmentsTable.date), desc(appointmentsTable.time));
+  res.json(ListManagerAppointmentsResponse.parse(await serializeAppointments(rows)));
+});
+
+router.get("/manager/customers", async (req, res): Promise<void> => {
+  if (!(await requireSalonManager(req, res))) return;
+  await ensureSalonSeeded();
+  const rows = await db
+    .select({
+      email: appointmentsTable.email,
+      customerName: appointmentsTable.customerName,
+      phone: appointmentsTable.phone,
+      date: appointmentsTable.date,
+      status: appointmentsTable.status,
+    })
+    .from(appointmentsTable)
+    .orderBy(desc(appointmentsTable.date));
+  const today = new Date().toISOString().slice(0, 10);
+  const customers = new Map<
+    string,
+    {
+      email: string;
+      customerName: string;
+      phone: string;
+      appointmentCount: number;
+      upcomingAppointmentCount: number;
+      lastVisit: string | null;
+    }
+  >();
+  for (const row of rows) {
+    if (row.status === "cancelled") continue;
+    const key = row.email.toLowerCase();
+    const customer = customers.get(key) ?? {
+      email: row.email,
+      customerName: row.customerName,
+      phone: row.phone,
+      appointmentCount: 0,
+      upcomingAppointmentCount: 0,
+      lastVisit: null,
+    };
+    customer.appointmentCount += 1;
+    if (row.date >= today) customer.upcomingAppointmentCount += 1;
+    if (!customer.lastVisit || row.date > customer.lastVisit) customer.lastVisit = row.date;
+    customers.set(key, customer);
+  }
+  res.json(ListManagerCustomersResponse.parse(
+    [...customers.values()].sort((left, right) => right.appointmentCount - left.appointmentCount),
+  ));
 });
 
 router.get("/salon-summary", (_req, res): void => {

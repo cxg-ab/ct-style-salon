@@ -34,6 +34,12 @@ type MessageKey =
   | 'noPayment' | 'confirmationInbox' | 'inTheBooks' | 'seeYouSoon' | 'confirmationSent'
   | 'viewAppointments' | 'yourVisits' | 'goodTimes' | 'lookupIntro' | 'lookupPlaceholder'
   | 'findVisits' | 'appointments' | 'nothingBooked' | 'readyHere' | 'bookAVisit'
+  | 'myAccount' | 'accountIntro' | 'accountEmpty' | 'changeAppointment' | 'closeEditor'
+  | 'accountChangeHint' | 'chooseTime' | 'loadingTimes' | 'appointmentChanged'
+  | 'appointmentChangeError' | 'cancelAppointment' | 'cancelAppointmentConfirm'
+  | 'appointmentCancelled' | 'appointmentCancelError' | 'customerList' | 'customers'
+  | 'customerIntro' | 'noCustomers' | 'visits' | 'upcoming' | 'lastVisit'
+  | 'appointmentList' | 'appointmentIntro' | 'noAppointments'
   | 'managerSignInTitle' | 'managerSignInIntro' | 'managerAccessDeniedTitle' | 'managerAccessDeniedIntro' | 'signIn' | 'notReachStudio'
   | 'tryAgain' | 'errorRequired' | 'errorDuration' | 'errorPrice' | 'serviceSaved'
   | 'serviceAdded' | 'serviceUpdated' | 'serviceSaveError' | 'noManagedServices'
@@ -116,6 +122,17 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     lookupIntro: 'Enter the email you used when booking and we will bring up your salon notes.',
     lookupPlaceholder: 'you@example.com', findVisits: 'Find my visits', appointments: 'Your appointments',
     nothingBooked: 'Nothing booked yet.', readyHere: 'When you are ready, we will be here.',
+    myAccount: 'My account', accountIntro: 'Your bookings live here. Change or cancel an upcoming visit whenever you need to.',
+    accountEmpty: 'Sign in while booking and your next visit will appear here automatically.',
+    changeAppointment: 'Change appointment', closeEditor: 'Close', accountChangeHint: 'Keep the same employee and services; choose a new date and time within five days.',
+    chooseTime: 'Choose a time', loadingTimes: 'Loading times…', appointmentChanged: 'Your appointment was rescheduled.',
+    appointmentChangeError: 'We could not change that appointment. Please choose another time.',
+    cancelAppointment: 'Cancel appointment', cancelAppointmentConfirm: 'Cancel your appointment on',
+    appointmentCancelled: 'Your appointment was cancelled.', appointmentCancelError: 'We could not cancel that appointment. Please try again.',
+    customerList: 'Customer list', customers: 'Customers', customerIntro: 'A quick view of guests with active salon visits.',
+    noCustomers: 'No customers yet.', visits: 'visits', upcoming: 'upcoming', lastVisit: 'last',
+    appointmentList: 'Appointment list', appointmentIntro: 'Every booking in one place for the salon team.',
+    noAppointments: 'No appointments yet.',
     bookAVisit: 'Book a visit', managerSignInTitle: 'Sign in to keep chairs ready.',
     managerSignInIntro: 'This workspace is reserved for the salon team. Sign in with your manager account to update services and employee schedules.',
     managerAccessDeniedTitle: 'Manager access required.',
@@ -212,6 +229,17 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
     lookupIntro: 'أدخل البريد الذي استخدمته للحجز وسنعرض ملاحظاتك في الصالون.',
     lookupPlaceholder: 'you@example.com', findVisits: 'اعثر على مواعيدي', appointments: 'مواعيدك',
     nothingBooked: 'لا توجد حجوزات بعد.', readyHere: 'سنكون هنا عندما تكون مستعداً.',
+    myAccount: 'حسابي', accountIntro: 'ستجد حجوزاتك هنا. يمكنك تغيير أو إلغاء الزيارة القادمة عند الحاجة.',
+    accountEmpty: 'سجّل الدخول أثناء الحجز وسيظهر موعدك القادم هنا تلقائياً.',
+    changeAppointment: 'تغيير الموعد', closeEditor: 'إغلاق', accountChangeHint: 'حافظ على الموظف والخدمات نفسهما واختر تاريخاً ووقتاً جديدين خلال خمسة أيام.',
+    chooseTime: 'اختر وقتاً', loadingTimes: 'جارٍ تحميل الأوقات…', appointmentChanged: 'تم تغيير موعدك.',
+    appointmentChangeError: 'تعذر تغيير الموعد. اختر وقتاً آخر.',
+    cancelAppointment: 'إلغاء الموعد', cancelAppointmentConfirm: 'إلغاء موعدك في',
+    appointmentCancelled: 'تم إلغاء موعدك.', appointmentCancelError: 'تعذر إلغاء الموعد. حاول مرة أخرى.',
+    customerList: 'قائمة العملاء', customers: 'العملاء', customerIntro: 'نظرة سريعة على الضيوف أصحاب الزيارات النشطة.',
+    noCustomers: 'لا يوجد عملاء بعد.', visits: 'زيارات', upcoming: 'قادمة', lastVisit: 'الأخيرة',
+    appointmentList: 'قائمة المواعيد', appointmentIntro: 'كل الحجوزات في مكان واحد لفريق الصالون.',
+    noAppointments: 'لا توجد مواعيد بعد.',
     bookAVisit: 'احجز زيارة', managerSignInTitle: 'سجّل الدخول لإبقاء المقاعد جاهزة.',
     managerSignInIntro: 'هذه المساحة مخصصة لفريق الصالون. سجّل الدخول بحساب الإدارة لتحديث الخدمات وجداول الموظفين.',
     managerAccessDeniedTitle: 'يلزم الوصول كمدير.',
