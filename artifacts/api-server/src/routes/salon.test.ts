@@ -715,6 +715,57 @@ test("different employees return different slots for the same date", async () =>
   assert.notDeepEqual(marco.body[0]?.slots, aisha.body[0]?.slots);
 });
 
+test("today's availability excludes times already passed in the UAE", async () => {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Dubai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date())
+      .map(({ type, value }) => [type, value]),
+  );
+  const uaeDate = `${parts.year}-${parts.month}-${parts.day}`;
+  const currentMinutes = Number(parts.hour) * 60 + Number(parts.minute);
+  const weekday = new Date(`${uaeDate}T00:00:00.000Z`).getUTCDay();
+  const slotMinutes = (value: string) => {
+    const match = /^(\d{1,2}):(\d{2}) (AM|PM)$/.exec(value);
+    assert.ok(match);
+    return (Number(match[1]) % 12) * 60
+      + Number(match[2])
+      + (match[3] === "PM" ? 12 * 60 : 0);
+  };
+
+  await updateSchedule(aishaId, [{ dayOfWeek: weekday, openTime: "00:00", closeTime: "23:59" }]);
+
+  const availability = await request<Array<{ slots: string[] }>>(
+    `/api/availability?date=${uaeDate}&stylistId=${aishaId}&serviceId=${signatureCutId}`,
+  );
+  assert.equal(availability.response.status, 200);
+  assert.ok(!availability.body[0]?.slots.includes("12:00 AM"));
+  assert.ok(availability.body[0]?.slots.every((slot) => slotMinutes(slot) > currentMinutes));
+
+  const passedBooking = await request<{ error: string }>("/api/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      serviceId: signatureCutId,
+      stylistId: aishaId,
+      customerName: "UAE Time Regression",
+      email: "uae-time-regression@example.com",
+      phone: "+971500000000",
+      date: uaeDate,
+      time: "12:00 AM",
+      notes: null,
+    }),
+  });
+  assert.equal(passedBooking.response.status, 400);
+  assert.match(passedBooking.body.error, /already passed in the UAE/i);
+});
+
 test("a booking blocks only the employee who owns that booking", async () => {
   await updateSchedule(marcoId, scheduleWithMonday("10:00", "18:00"));
   await updateSchedule(aishaId, scheduleWithMonday("10:00", "18:00"));

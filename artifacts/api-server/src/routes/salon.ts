@@ -305,8 +305,9 @@ function appointmentResponse(
 }
 
 function isWithinBookingWindow(date: Date): boolean {
-  const today = new Date();
-  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const today = uaeDateTimeParts().date;
+  const [todayYear, todayMonth, todayDay] = today.split("-").map(Number);
+  const todayUtc = Date.UTC(todayYear, todayMonth - 1, todayDay);
   const requestedUtc = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
   const daysAhead = Math.round((requestedUtc - todayUtc) / (24 * 60 * 60 * 1000));
   return daysAhead >= 0 && daysAhead <= MAX_BOOKING_DAYS_AHEAD;
