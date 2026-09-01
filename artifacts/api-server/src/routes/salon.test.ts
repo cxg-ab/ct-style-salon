@@ -14,7 +14,9 @@ import type { StylistScheduleEntry } from "../lib/salon-seed";
 import { ObjectStorageService } from "../lib/objectStorage";
 
 const testDate = "2099-09-07";
+const employeeScopeDate = "2099-09-21";
 const testEmail = "schedule-regression@example.com";
+const employeeScopeEmail = "employee-scope-regression@example.com";
 const bundleEmail = "bundle-regression@example.com";
 const managerEditEmail = "manager-edit-regression@example.com";
 const lifecycleEmail = "stylist-lifecycle@example.com";
@@ -130,6 +132,7 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${address.port}`;
 
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, testEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, employeeScopeEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, bundleEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, managerEditEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, lifecycleEmail));
@@ -180,6 +183,7 @@ after(async () => {
     await updateSchedule(stylistId, schedule);
   }
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, testEmail));
+  await db.delete(appointmentsTable).where(eq(appointmentsTable.email, employeeScopeEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, bundleEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, managerEditEmail));
   await db.delete(appointmentsTable).where(eq(appointmentsTable.email, lifecycleEmail));
@@ -709,6 +713,53 @@ test("different employees return different slots for the same date", async () =>
   assert.deepEqual(marco.body[0]?.slots, ["10:00 AM", "11:30 AM", "1:00 PM"]);
   assert.deepEqual(aisha.body[0]?.slots, ["2:00 PM", "3:30 PM", "5:00 PM"]);
   assert.notDeepEqual(marco.body[0]?.slots, aisha.body[0]?.slots);
+});
+
+test("a booking blocks only the employee who owns that booking", async () => {
+  await updateSchedule(marcoId, scheduleWithMonday("10:00", "18:00"));
+  await updateSchedule(aishaId, scheduleWithMonday("10:00", "18:00"));
+
+  const khaledBooking = await request("/api/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      serviceId: signatureCutId,
+      stylistId: marcoId,
+      customerName: "Employee Scope Regression",
+      email: employeeScopeEmail,
+      phone: "+971500000000",
+      date: employeeScopeDate,
+      time: "10:00 AM",
+    }),
+  });
+  assert.equal(khaledBooking.response.status, 201);
+
+  const [khaledAvailability, otherEmployeeAvailability] = await Promise.all([
+    request<Array<{ stylistId: number; slots: string[] }>>(
+      `/api/availability?date=${employeeScopeDate}&stylistId=${marcoId}&serviceId=${signatureCutId}`,
+    ),
+    request<Array<{ stylistId: number; slots: string[] }>>(
+      `/api/availability?date=${employeeScopeDate}&stylistId=${aishaId}&serviceId=${signatureCutId}`,
+    ),
+  ]);
+
+  assert.equal(khaledAvailability.response.status, 200);
+  assert.equal(otherEmployeeAvailability.response.status, 200);
+  assert.ok(!khaledAvailability.body[0]?.slots.includes("10:00 AM"));
+  assert.ok(otherEmployeeAvailability.body[0]?.slots.includes("10:00 AM"));
+
+  const otherEmployeeBooking = await request("/api/appointments", {
+    method: "POST",
+    body: JSON.stringify({
+      serviceId: signatureCutId,
+      stylistId: aishaId,
+      customerName: "Other Employee Booking",
+      email: employeeScopeEmail,
+      phone: "+971500000000",
+      date: employeeScopeDate,
+      time: "10:00 AM",
+    }),
+  });
+  assert.equal(otherEmployeeBooking.response.status, 201);
 });
 
 test("recurring breaks are saved and remove overlapping appointment starts", async () => {

@@ -807,7 +807,6 @@ router.get("/availability", async (req, res): Promise<void> => {
 
   const booked = await db
     .select({
-      stylistId: appointmentsTable.stylistId,
       time: appointmentsTable.time,
       durationMinutes: appointmentsTable.totalDurationMinutes,
       legacyDurationMinutes: servicesTable.durationMinutes,
@@ -816,20 +815,16 @@ router.get("/availability", async (req, res): Promise<void> => {
     .innerJoin(servicesTable, eq(appointmentsTable.serviceId, servicesTable.id))
     .where(
       and(
+        eq(appointmentsTable.stylistId, stylist.id),
         eq(appointmentsTable.date, date),
         ne(appointmentsTable.status, "cancelled"),
         ne(appointmentsTable.status, "completed"),
       ),
     );
-  const bookedByStylist = new Map<number, BookedAppointment[]>();
-  for (const appointment of booked) {
-    const appointments = bookedByStylist.get(appointment.stylistId) ?? [];
-    appointments.push({
-      time: appointment.time,
-      durationMinutes: appointment.durationMinutes ?? appointment.legacyDurationMinutes,
-    });
-    bookedByStylist.set(appointment.stylistId, appointments);
-  }
+  const bookedAppointments: BookedAppointment[] = booked.map((appointment) => ({
+    time: appointment.time,
+    durationMinutes: appointment.durationMinutes ?? appointment.legacyDurationMinutes,
+  }));
 
   const schedule = stylist.schedule ?? [];
   const weekday = parsed.data.date.getUTCDay();
@@ -839,15 +834,13 @@ router.get("/availability", async (req, res): Promise<void> => {
     slots: schedule.length > 0
       ? slotsForSchedule(schedule, weekday, durationMinutes).filter(
           (slot) =>
-            !bookedByStylist
-              .get(stylist.id)
-              ?.some((bookedAppointment) =>
-                appointmentTimesOverlap(
-                  slot,
-                  durationMinutes,
-                  bookedAppointment,
-                ),
+            !bookedAppointments.some((bookedAppointment) =>
+              appointmentTimesOverlap(
+                slot,
+                durationMinutes,
+                bookedAppointment,
               ),
+            ),
         )
       : [],
   }];
