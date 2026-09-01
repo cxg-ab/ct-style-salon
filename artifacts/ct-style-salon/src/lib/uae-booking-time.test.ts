@@ -37,3 +37,9 @@ test('rolls a selected booking date forward when the UAE date changes', () => {
   assert.equal(rolloverDate('2026-05-10', afterMidnight), '2026-05-11');
   assert.equal(rolloverDate('2026-05-16', afterMidnight), '2026-05-16');
 });
+
+test('does not keep a selected time after it has passed in the UAE', () => {
+  const now = new Date('2026-05-10T10:00:00.000Z');
+  assert.equal(isFutureUaeSlot('2026-05-10', '1:59 PM', now), false);
+  assert.equal(isFutureUaeSlot('2026-05-10', '2:01 PM', now), true);
+});

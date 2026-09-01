@@ -87,7 +87,21 @@ function useUaeClockTick() {
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 30_000);
-    return () => window.clearInterval(interval);
+    const refreshOnResume = () => setNow(Date.now());
+    const refreshOnVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshOnResume();
+      }
+    };
+
+    window.addEventListener('focus', refreshOnResume);
+    document.addEventListener('visibilitychange', refreshOnVisibility);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshOnResume);
+      document.removeEventListener('visibilitychange', refreshOnVisibility);
+    };
   }, []);
 
   return now;
@@ -1647,7 +1661,7 @@ function Book() {
   const servicesQuery = useListServices({ query: { queryKey: getListServicesQueryKey() } });
   const stylistsQuery = useListStylists({ query: { queryKey: getListStylistsQueryKey() } });
   const availabilityParams = useMemo(() => ({ date, stylistId: stylistId ?? 0, serviceIds }), [date, stylistId, serviceIds]);
-  const availabilityQuery = useGetAvailability(availabilityParams, { query: { enabled: Boolean(date && stylistId && serviceIds.length > 0), queryKey: getGetAvailabilityQueryKey(availabilityParams) } });
+  const availabilityQuery = useGetAvailability(availabilityParams, { query: { enabled: Boolean(date && stylistId && serviceIds.length > 0), queryKey: getGetAvailabilityQueryKey(availabilityParams), refetchOnWindowFocus: true } });
   const createAppointment = useCreateAppointment();
   const services = servicesQuery.data ?? [];
   const stylists = stylistsQuery.data ?? [];
@@ -1664,18 +1678,21 @@ function Book() {
   const totalPrice = selectedServices.reduce((total, service) => total + Number(service.price), 0);
 
   useEffect(() => {
-    const nextDate = rolloverDate(date, new Date(nowTick));
+    const now = new Date(nowTick);
+    const nextDate = rolloverDate(date, now);
     if (nextDate !== date) {
       setDate(nextDate);
       setTime('');
+    } else if (time && !isFutureUaeSlot(date, time, now)) {
+      setTime('');
     }
-  }, [date, nowTick]);
+  }, [date, nowTick, time]);
 
   useEffect(() => {
-    if (stylistId && serviceIds.length > 0 && date) {
-      void availabilityQuery.refetch();
+    if (availabilityQuery.isSuccess && time && !slots.includes(time)) {
+      setTime('');
     }
-  }, [nowTick]);
+  }, [availabilityQuery.isSuccess, slots, time]);
 
   useEffect(() => {
     if (!user) return;
@@ -1765,6 +1782,7 @@ function AccountAppointments() {
     query: {
       enabled: Boolean(editingAppointment && editDate && editingAppointment.status !== 'cancelled'),
       queryKey: getGetAvailabilityQueryKey(availabilityParams),
+      refetchOnWindowFocus: true,
     },
   });
   const updateAppointment = useUpdateAppointment();
@@ -1780,10 +1798,17 @@ function AccountAppointments() {
   const accountEmail = user?.primaryEmailAddress?.emailAddress ?? '';
 
   useEffect(() => {
-    if (editingAppointment && editDate) {
-      void availabilityQuery.refetch();
+    const now = new Date(nowTick);
+    if (editingId !== null && editDate && editTime && !isFutureUaeSlot(editDate, editTime, now)) {
+      setEditTime('');
     }
-  }, [nowTick]);
+  }, [editDate, editingId, editTime, nowTick]);
+
+  useEffect(() => {
+    if (availabilityQuery.isSuccess && editTime && !rescheduleSlots.includes(editTime)) {
+      setEditTime('');
+    }
+  }, [availabilityQuery.isSuccess, editTime, rescheduleSlots]);
 
   const openEditor = (appointment: Appointment) => {
     setEditingId(appointment.id);
