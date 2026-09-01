@@ -43,6 +43,13 @@ CT Style Salon is a polished salon booking experience for discovering services, 
 - Guests can look up confirmed visits by the email used when booking.
 - The salon summary includes rating, location, hours, and next availability.
 
+## Manager workflow
+
+- The manager overview tracks completed appointments today, total appointments for today, next visits, and employees available in the next two hours.
+- Each available employee has a booking shortcut that opens step 02, “Choose a service,” with that employee already selected.
+- Employee profile editing and working-schedule editing are separate. Each employee has an independent collapsed Working schedule panel that opens on demand.
+- Enabled working days start with a valid preset break, and managers can edit or add up to three breaks per day. Breaks are validated against working hours and blocked in availability.
+
 ## User preferences
 
 _Populate as you build — explicit user instructions worth remembering across sessions._

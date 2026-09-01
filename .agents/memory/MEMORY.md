@@ -6,3 +6,4 @@
 - [Booking-window test fixtures](booking-window-test-fixtures.md) — legacy API fixtures use historical dates, so the five-day guard is bypassed only under test.
 - [UAE booking clock](uae-booking-clock.md) — booking and rescheduling date bounds must derive from the same ticking UAE clock, not an untracked wall-clock read.
 - [Clerk manager browser tests](clerk-manager-browser-tests.md) — programmatic sign-in does not guarantee a manager role exists in signed claims or the live Clerk user record.
+- [Manager roster and schedules](manager-roster-schedules.md) — keep employee profile edits separate from collapsed per-employee schedules and preserve break controls.
