@@ -14,3 +14,17 @@ mtime_ms = 1788164402068
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:70d339f0-fb2d-4ffa-b908-f35e539f1205/0e5e6016-ce68-4391-bf76-d6875da5dda8/936a3554-04c5-4cd7-9476-32e5dfaff021"
 storage_version_token = "1788164590306615"
 content_type = "image/png"
+
+[[outputs]]
+id = "9BxdiECgigSUGoxfPnR9Y"
+uri = "file://artifacts/ct-style-salon/public/demo-employee-photo.jpg"
+type = "image"
+title = "Demo employee photo"
+description = "Temporary generated portrait used for the first photo-less stylist while the manager upload flow is being demonstrated."
+logical_id = "7ee9be76-86fb-4316-8460-7c4d590afe72"
+content_hash = "sha256:a0e3c6a39216c25590f5132df6d2f6499aad258b3e2f7e06c7fa1ae0cbb58d15"
+size = 129792
+mtime_ms = 1788238149090
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:70d339f0-fb2d-4ffa-b908-f35e539f1205/7ee9be76-86fb-4316-8460-7c4d590afe72/536158d8-3838-4ffe-a03c-4a0a5bf9ceb3"
+storage_version_token = "1788238224284276"
+content_type = "image/jpeg"

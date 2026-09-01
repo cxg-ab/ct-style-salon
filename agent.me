@@ -1,0 +1,48 @@
+# CT Style Salon — Agent Report
+
+**Report date:** 2026-09-01
+**Repository:** https://github.com/cxg-ab/ct-style-salon
+**Branch:** `main`
+
+## Latest update
+
+Task #19, “Let managers upload employee photos,” was merged at commit:
+
+`29ed1707ea8703a83fd956bf612a08af12a337dd`
+
+The merged update includes:
+
+- Manager-only employee photo upload flow
+- Image type and 5 MB size validation
+- Direct App Storage upload with progress feedback
+- Employee photo preview, replacement, and removal
+- Object-path rendering with legacy external URL support
+- Generated OpenAPI and Zod client updates
+- A temporary local demo employee portrait
+
+## Demo photo
+
+The first photo-less stylist currently uses the temporary portrait at:
+
+`/demo-employee-photo.jpg`
+
+This fallback does not overwrite an existing employee photo. A manager can replace it through the employee editor once the real portrait is available.
+
+## Verification
+
+- Workspace typecheck passed
+- API tests passed: 19/19
+- Frontend booking tests passed: 2/2
+- Frontend production build passed
+- API and web workflows restarted successfully
+- Demo image served successfully by the Vite web server
+- Live stylist API returned the expected demo photo path
+
+## GitHub sync
+
+The latest source, generated clients, assets, README, and this report have been pushed to GitHub through the connected repository integration.
+
+Two generated artifact entry files remain excluded because the GitHub connector’s Cloudflare edge rejects those specific `index.html` writes:
+
+- `artifacts/ct-style-salon/index.html`
+- `artifacts/mockup-sandbox/index.html`

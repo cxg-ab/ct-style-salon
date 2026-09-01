@@ -2,3 +2,5 @@
 - [Orval and Zod compatibility](orval-zod-compatibility.md) — generated validators require the workspace Zod major version expected by Orval.
 - [Salon regression fixtures](salon-regression-fixtures.md) — API tests should derive service/stylist assumptions from live records because persisted seed data may be customized.
 - [GitHub sync limitation](github-sync-limitation.md) — GitHub connector reads work, but nested repository writes can be blocked by Cloudflare while root file writes succeed.
+- [Generated client freshness](generated-client-freshness.md) — OpenAPI contract changes require codegen before runtime validators reflect them.
+- [Artifact public asset paths](artifact-public-asset-paths.md) — verify the mounted preview base before persisting URLs for static web assets.
